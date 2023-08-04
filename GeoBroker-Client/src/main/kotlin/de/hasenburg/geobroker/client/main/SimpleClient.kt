@@ -39,7 +39,7 @@ class SimpleClient(ip: String, port: Int, socketHWM: Int = 1000, val identity: S
      */
     fun send(payload: Payload): Boolean {
         val zMsg = payload.toZMsg(clientIdentifier = identity)
-        return spDealer.toSent.offer(zMsg)
+        return spDealer.toSent.trySend(zMsg).isSuccess
     }
 
     /**

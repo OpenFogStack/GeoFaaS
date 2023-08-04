@@ -18,7 +18,7 @@
     </modules>
 
     <properties>
-        <kotlin.version>1.5.0</kotlin.version>
+        <kotlin.version>1.7.0</kotlin.version>
         <serialization.version>1.2.1</serialization.version>
         <kotlin.compiler.jvmTarget>11</kotlin.compiler.jvmTarget>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
