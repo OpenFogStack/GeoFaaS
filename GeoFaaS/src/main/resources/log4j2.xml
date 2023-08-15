@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%highlight{%d{HH:mm:ss.SSS} [%-15t] %-5level %-30c{2} - %msg%n}"/>
+        </Console>
+        <File name="File" fileName="logs/client.log" append="false">
+            <PatternLayout pattern="%highlight{%d{HH:mm:ss.SSS} [%-15t] %-5level %-30c{2} - %msg%n}"/>
+        </File>
+    </Appenders>
+    <Loggers>
+        <Root level="info" additivity="false">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="File"/>
+        </Root>
+        <Logger name="de.hasenburg.geobroker.client.main.MultiFileClientKt" level="info" additivity="false">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="File"/>
+        </Logger>
+    </Loggers>
+</Configuration>
