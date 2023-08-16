@@ -17,7 +17,7 @@ private val logger = LogManager.getLogger()
 class GeoBrokerClient(val location: Location = Location(0.0,0.0)) {
 
     private val processManager = ZMQProcessManager()
-    private val client = SimpleClient("localhost", 5559)//, identity = "FunctionChannel_$funcName")
+    private val client = SimpleClient("localhost", 5559, identity = "GeoFaaS")
     init {
         setLogLevel(logger, Level.DEBUG)
         client.send(Payload.CONNECTPayload(location)) // connect //FIXME: location of the client?
@@ -40,31 +40,33 @@ class GeoBrokerClient(val location: Location = Location(0.0,0.0)) {
         //TODO: subscribe to /function/ack?
     }
 
-    fun listen(funcName: String) {
+    fun listen(funcName: String): String {
         // function call
         logger.info("Listening on the topic: '/$funcName/call'...")
         val msg = client.receive()
         logger.info("Received server answer: {}", msg)
         if (msg is Payload.PUBLISHPayload) {
-            logger.info("msg is a publish payload")
-            if (msg.topic.topic == "/$funcName/call") {
-                logger.info("msg is for the '{}' topic", msg.topic.topic)
-                // TODO: call tinyfaas (async)?
-                // TODO: send ack
-
-
-            } else {
-                logger.debug("Wrong topic: ${msg.topic.topic}")
-            }
+            logger.info("new publish msg:")
             logger.debug(msg.topic) // Topic(topic=/f1/call)
             logger.debug(msg.content) // {messaaggee}
             logger.debug(msg.geofence) // BUFFER (POINT (0 0), 2)
+            if (msg.topic.topic == "/$funcName/call") {
+                logger.info("new call on the '{}' topic", msg.topic.topic)
+                // TODO: call tinyfaas (async)?
+                // TODO: send ack
+                return "ok"
+
+            } else {
+                logger.debug("Wrong topic: ${msg.topic.topic}")
+                return "no"
+            }
         }
+        return "no"
     }
 
     // publishes result for a function request
     fun sendResult(funcName: String, res: String) { //TODO: what location to send the result?
-        client.send(Payload.PUBLISHPayload(Topic("/$funcName/result"),Geofence.circle(location,2.0),"Test Message"))
+        client.send(Payload.PUBLISHPayload(Topic("/$funcName/result"),Geofence.circle(location,2.0), res))
         val msg = client.receive()
         logger.info("Received server answer: {}", msg)
         if (msg is Payload.PUBACKPayload) {
@@ -83,7 +85,7 @@ class GeoBrokerClient(val location: Location = Location(0.0,0.0)) {
     }
 
     // follow geoBroker instructions to Disconnect
-    fun terminate() {
+    fun terminate() { // FIXME: can be called twice. once in initialization, once in the continue of an error
         client.send(Payload.DISCONNECTPayload(ReasonCode.NormalDisconnection)) // disconnect
         client.tearDownClient()
         if (processManager.tearDown(3000)) {
@@ -97,10 +99,10 @@ class GeoBrokerClient(val location: Location = Location(0.0,0.0)) {
 
 }
 
-fun main() {
-    val f1 = GeoBrokerClient()
-    f1.subscribeFunction("f1")
-    f1.listen("f1") //TODO: call in a coroutine
-    f1.listen("f1")
-    f1.terminate() // FIXME: can be called twice. once in initialization
-}
+//fun main() {
+//    val f1 = GeoBrokerClient()
+//    f1.subscribeFunction("f1")
+//    f1.listen("f1") //TODO: call in a coroutine
+//    f1.listen("f1")
+//    f1.terminate()
+//}

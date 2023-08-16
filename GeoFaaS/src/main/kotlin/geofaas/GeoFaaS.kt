@@ -1,11 +1,8 @@
 package geofaas
 
-import geofaas.TinyFaasClient
+import de.hasenburg.geobroker.commons.sleepNoLog
 import io.ktor.client.call.*
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.async
-import kotlinx.coroutines.launch
+import org.apache.logging.log4j.LogManager
 
 class GeoFaaS {
     // Properties
@@ -14,13 +11,24 @@ class GeoFaaS {
 
 }
 
-@OptIn(DelicateCoroutinesApi::class)
-fun main() {
+suspend fun main() {
+    val logger = LogManager.getLogger()
     val tf = TinyFaasClient("localhost", 8000)
-    GlobalScope.async {
-        val response = tf.call("sieve")
-        val responseBody: String = response.body()
-        println(responseBody)
-    }
+    val geobroker = GeoBrokerClient()
+    val sampleFunction = "sieve"
 
+    geobroker.subscribeFunction(sampleFunction)
+    val call = geobroker.listen(sampleFunction) //TODO: call in a coroutine
+    if(call == "ok"){
+        val response = tf.call(sampleFunction)
+        logger.debug("FaaS Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
+        val responseBody: String = response.body()
+        geobroker.sendResult(sampleFunction, responseBody)
+        logger.info("sent the result '{}' to /$sampleFunction/result topic", responseBody) //Found 1229 primes under 10000
+//        GlobalScope.launch {
+//        }
+    } else {
+        logger.error("Expected a msg on the $sampleFunction channel!")
+    }
+    geobroker.terminate()
 }
