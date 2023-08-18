@@ -8,6 +8,8 @@ import de.hasenburg.geobroker.commons.model.message.Topic
 import de.hasenburg.geobroker.commons.model.spatial.Geofence
 import de.hasenburg.geobroker.commons.model.spatial.Location
 import de.hasenburg.geobroker.commons.setLogLevel
+import geofaas.Model.FunctionAction
+import geofaas.Model.FunctionMessage
 import org.apache.logging.log4j.Level
 import org.apache.logging.log4j.LogManager
 
@@ -22,60 +24,60 @@ class GeoBrokerClient(val location: Location = Location(0.0,0.0)) {
     init {
         setLogLevel(logger, Level.DEBUG)
         client.send(Payload.CONNECTPayload(location)) // connect //FIXME: location of the client?
-        logger.info("Received server answer (Conn ACK): {}", client.receive())
+        logger.info("Received geoBroker's answer (Conn ACK): {}", client.receive())
         // TODO: Check if this is success else error and terminate
     }
 
     fun subscribeFunction(funcName: String) {
-        if (notSubscribedTo("/$funcName/call")) { // check if already subscribed
-            val topic = Topic("/$funcName/call")
+        if (notSubscribedTo("functions/$funcName/call")) { // check if already subscribed
+            val topic = Topic("functions/$funcName/call")
             val fence = Geofence.circle(location, 2.0) //FIXME: change the location of subscription
             client.send(Payload.SUBSCRIBEPayload(topic, fence))
             val subAck = client.receive()
             if (subAck is Payload.SUBACKPayload){
                 if (subAck.reasonCode == ReasonCode.GrantedQoS0){
-                    logger.info("Received server answer(Sub ACK for '$funcName' call): {}", subAck)
+                    logger.info("Received geoBroker's answer(Sub ACK for '$funcName' call): {}", subAck)
                     listeningTopics.add(Pair(topic, fence))
                 } else {
-                    logger.fatal("Error Subscribing to /$funcName/call. Terminating...")
+                    logger.fatal("Error Subscribing to functions/$funcName/call. Terminating...")
                     this.terminate()
                 }
             }
-            //TODO: subscribe to /function/ack?
+            //TODO: subscribe to functions/f/ack?
         } else {
             logger.error("already subscribed to the '$funcName'")
         }
     }
 
-    fun listen(funcName: String): String {
+    fun listen(): FunctionMessage? {
         // function call
-        logger.info("Listening on the topic: '/$funcName/call'...")
+        logger.info("Listening to the geoBroker server...")
         val msg = client.receive()
-        logger.info("Received server answer: {}", msg)
+        logger.info("new geoBroker msg: {}", msg)
         if (msg is Payload.PUBLISHPayload) {
-            logger.info("new publish msg:")
-            logger.debug(msg.topic) // Topic(topic=/f1/call)
-            logger.debug(msg.content) // {messaaggee}
-            logger.debug(msg.geofence) // BUFFER (POINT (0 0), 2)
-            if (msg.topic.topic == "/$funcName/call") {
-                logger.info("new call on the '{}' topic", msg.topic.topic)
-                // TODO: call tinyfaas (async)?
-                // TODO: send ack (GeoFaaS's responsibility)
-                return "ok"
-
+// wiki:    msg.topic    => Topic(topic=functions/f1/call)
+// wiki:    msg.content  => message
+// wiki:    msg.geofence => BUFFER (POINT (0 0), 2)
+            val topic = msg.topic.topic.split("/")
+            if(topic.first() == "functions") {
+                val funcName = topic[1]
+                val funcAction = topic[2].uppercase() //NOTE: don't replace with .last()
+                return FunctionMessage(funcName, FunctionAction.valueOf(funcAction), msg.content)
             } else {
-                logger.debug("Wrong topic: ${msg.topic.topic}")
-                return "no"
+                logger.error("msg is not related to the functions! {}", msg.topic.topic)
+                return null
             }
+        } else {
+            logger.error("Unexpected geoBroker message")
+            return null
         }
-        return "no"
     }
 
     // publishes result for a function request
     fun sendResult(funcName: String, res: String) { //TODO: what location to send the result?
-        client.send(Payload.PUBLISHPayload(Topic("/$funcName/result"),Geofence.circle(location,2.0), res))
+        client.send(Payload.PUBLISHPayload(Topic("functions/$funcName/result"),Geofence.circle(location,2.0), res))
         val msg = client.receive()
-        logger.info("Received server answer: {}", msg)
+        logger.info("Received geoBroker's answer: {}", msg)
         if (msg is Payload.PUBACKPayload) {
             if (msg.reasonCode == ReasonCode.NoMatchingSubscribers) {
                 logger.error("No matching subscriber found when sending the result for the function '$funcName'")
@@ -87,7 +89,7 @@ class GeoBrokerClient(val location: Location = Location(0.0,0.0)) {
 
     // publishes an Acknowledgement for receiving and processing a request
     fun sendAck(funcName: String) {
-        // TODO: I got your request! Send an ack on "/$funcname/ack"
+        // TODO: I got your request! Send an ack on "functions/$funcname/ack"
         // TODO: check if reasonCode is okay. log error if not.
     }
 
