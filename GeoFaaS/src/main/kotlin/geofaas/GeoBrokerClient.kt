@@ -16,6 +16,7 @@ private val logger = LogManager.getLogger()
 // A Geobroker client to integrate with GeoFaaS for a func
 class GeoBrokerClient(val location: Location = Location(0.0,0.0)) {
 
+    var listeningTopics = mutableSetOf<Pair<Topic, Geofence>>()
     private val processManager = ZMQProcessManager()
     private val client = SimpleClient("localhost", 5559, identity = "GeoFaaS")
     init {
@@ -26,18 +27,24 @@ class GeoBrokerClient(val location: Location = Location(0.0,0.0)) {
     }
 
     fun subscribeFunction(funcName: String) {
-        client.send(Payload.SUBSCRIBEPayload(Topic("/$funcName/call"),
-            Geofence.circle(location, 2.0))) //FIXME: change location of subscription
-        val subAck = client.receive()
-        if (subAck is Payload.SUBACKPayload){
-            if (subAck.reasonCode == ReasonCode.GrantedQoS0){
-                logger.info("Received server answer(Sub ACK for '$funcName' call): {}", subAck)
-            } else {
-                logger.error("Error Subscribing to /$funcName/call. Terminating...")
-                this.terminate()
+        if (notSubscribedTo("/$funcName/call")) { // check if already subscribed
+            val topic = Topic("/$funcName/call")
+            val fence = Geofence.circle(location, 2.0) //FIXME: change the location of subscription
+            client.send(Payload.SUBSCRIBEPayload(topic, fence))
+            val subAck = client.receive()
+            if (subAck is Payload.SUBACKPayload){
+                if (subAck.reasonCode == ReasonCode.GrantedQoS0){
+                    logger.info("Received server answer(Sub ACK for '$funcName' call): {}", subAck)
+                    listeningTopics.add(Pair(topic, fence))
+                } else {
+                    logger.fatal("Error Subscribing to /$funcName/call. Terminating...")
+                    this.terminate()
+                }
             }
+            //TODO: subscribe to /function/ack?
+        } else {
+            logger.error("already subscribed to the '$funcName'")
         }
-        //TODO: subscribe to /function/ack?
     }
 
     fun listen(funcName: String): String {
@@ -53,7 +60,7 @@ class GeoBrokerClient(val location: Location = Location(0.0,0.0)) {
             if (msg.topic.topic == "/$funcName/call") {
                 logger.info("new call on the '{}' topic", msg.topic.topic)
                 // TODO: call tinyfaas (async)?
-                // TODO: send ack
+                // TODO: send ack (GeoFaaS's responsibility)
                 return "ok"
 
             } else {
@@ -95,6 +102,10 @@ class GeoBrokerClient(val location: Location = Location(0.0,0.0)) {
                 processManager.incompleteZMQProcesses)
         }
 //        exitProcess(0) // terminates current process
+    }
+
+    private fun notSubscribedTo(topic: String): Boolean { // NOTE: checks only the topic, not the fence
+        return listeningTopics.map { it.first.topic }.filter { it == topic }.isEmpty()
     }
 
 }
