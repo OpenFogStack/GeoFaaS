@@ -10,13 +10,14 @@ import io.ktor.client.statement.*
 
 //Note: management API is on the 8080 port, Thus, CANNOT run two instances on the same ip
 class TinyFaasClient (private val host: String, val port: Int) {
+    //FIXME: on init: check host:port if tinyFaaS is online and 'connection refused' won't happen
     private val client: HttpClient = HttpClient(CIO) { // CIO is an asynchronous coroutine-based engine
         expectSuccess = true // expectSuccess is a resp validation
         install(Logging)
      }
 
-    suspend fun call(funcname: String, data: String): HttpResponse {
-        return client.get("http://$host:$port/$funcname") //TODO: add data in call
+    suspend fun call(funcName: String, data: String): HttpResponse {
+        return client.get("http://$host:$port/$funcName") //TODO: add data in the call
     }
 
     suspend fun funcList(): HttpResponse {

@@ -16,13 +16,13 @@ import org.apache.logging.log4j.LogManager
 private val logger = LogManager.getLogger()
 
 // A Geobroker client to integrate with GeoFaaS for a func
-class GeoBrokerClient(val location: Location = Location(0.0,0.0)) {
+class GeoBrokerClient(val location: Location = Location(0.0,0.0), debug: Boolean, host: String = "localhost", port: Int = 5559) {
 
     var listeningTopics = mutableSetOf<Pair<Topic, Geofence>>()
     private val processManager = ZMQProcessManager()
-    private val client = SimpleClient("localhost", 5559, identity = "GeoFaaS")
+    private val client = SimpleClient(host, port, identity = "GeoFaaS")
     init {
-        setLogLevel(logger, Level.DEBUG)
+        if (debug) { setLogLevel(logger, Level.DEBUG) }
         client.send(Payload.CONNECTPayload(location)) // connect //FIXME: location of the client?
         logger.info("Received geoBroker's answer (Conn ACK): {}", client.receive())
         // TODO: Check if this is success else error and terminate
@@ -39,7 +39,7 @@ class GeoBrokerClient(val location: Location = Location(0.0,0.0)) {
                     logger.info("Received geoBroker's answer(Sub ACK for '$funcName' call): {}", subAck)
                     listeningTopics.add(Pair(topic, fence))
                 } else {
-                    logger.fatal("Error Subscribing to functions/$funcName/call. Terminating...")
+                    logger.fatal("Error Subscribing to 'functions/$funcName/call'. Terminating...")
                     this.terminate()
                 }
             }
@@ -89,7 +89,7 @@ class GeoBrokerClient(val location: Location = Location(0.0,0.0)) {
 
     // publishes an Acknowledgement for receiving and processing a request
     fun sendAck(funcName: String) {
-        // TODO: I got your request! Send an ack on "functions/$funcname/ack"
+        // TODO: I got your request! Send an ack on "functions/$funcName/ack"
         // TODO: check if reasonCode is okay. log error if not.
     }
 
