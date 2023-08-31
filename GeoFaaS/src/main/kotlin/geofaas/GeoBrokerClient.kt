@@ -18,7 +18,7 @@ private val logger = LogManager.getLogger()
 // A Geobroker client to integrate with GeoFaaS for a func
 class GeoBrokerClient(val location: Location = Location(0.0,0.0), debug: Boolean, host: String = "localhost", port: Int = 5559) {
 
-    var listeningTopics = mutableSetOf<Pair<Topic, Geofence>>()
+    private var listeningTopics = mutableSetOf<Pair<Topic, Geofence>>()
     private val processManager = ZMQProcessManager()
     private val client = SimpleClient(host, port, identity = "GeoFaaS")
     init {
@@ -93,6 +93,11 @@ class GeoBrokerClient(val location: Location = Location(0.0,0.0), debug: Boolean
         // TODO: check if reasonCode is okay. log error if not.
     }
 
+    fun subscribedFunctionsList(): List<String> {
+        val functionCalls = listeningTopics.map { pair -> pair.first.topic }.filter { it.endsWith("/call") }
+        return functionCalls.map { it.substringAfter("/").substringBefore('/') } // name of function is between '/', e.g. "functions/f1/call"
+    }
+
     // follow geoBroker instructions to Disconnect
     fun terminate() { // FIXME: can be called twice. once in initialization, once in the continue of an error
         client.send(Payload.DISCONNECTPayload(ReasonCode.NormalDisconnection)) // disconnect
@@ -107,7 +112,7 @@ class GeoBrokerClient(val location: Location = Location(0.0,0.0), debug: Boolean
     }
 
     private fun notSubscribedTo(topic: String): Boolean { // NOTE: checks only the topic, not the fence
-        return listeningTopics.map { it.first.topic }.filter { it == topic }.isEmpty()
+        return listeningTopics.map { pair -> pair.first.topic }.filter { it == topic }.isEmpty()
     }
 
 }
