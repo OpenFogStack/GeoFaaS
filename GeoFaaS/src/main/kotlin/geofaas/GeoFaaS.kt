@@ -4,68 +4,76 @@ import io.ktor.client.call.*
 import org.apache.logging.log4j.LogManager
 import geofaas.Model.FunctionAction
 import geofaas.Model.GeoFaaSFunction
-import org.apache.logging.log4j.Logger
 
 object GeoFaaS {
     private val logger = LogManager.getLogger()
     private val geobroker = GeoBrokerClient(debug = true)
-    private var registeredFunctions = mutableSetOf<GeoFaaSFunction>()
-    private var faasRegistery = mutableMapOf<TinyFaasClient, List<String>>()
-    fun registerFunction(name: String) {
-        if (registeredFunctions.any { it.name == name }) {
-            logger.error("function $name is already registered in the GeoFaaS")
-        } else {
-            geobroker.subscribeFunction(name) //FIXME: check if subscribe was successful
-            registeredFunctions.add(GeoFaaSFunction(name))
-            logger.info("function '$name' registered to the GeoFaaS, and will be served for the new requests")
+    private var faasRegistry = mutableListOf<TinyFaasClient>()
+    fun registerFunctions(functions: Set<GeoFaaSFunction>) {
+        val subscribedFunctionsName = geobroker.subscribedFunctionsList().distinct() // distinct removes duplicates
+        functions.forEach { func ->
+            if ( func.name in subscribedFunctionsName) {
+                logger.debug("GeoFaaS already listens to '${func.name}' function calls")
+            } else {
+                geobroker.subscribeFunction(func.name) //FIXME: check if subscribe was successful
+                logger.info("function '${func.name}' registered to the GeoFaaS, and will be served for the new requests")
+            }
         }
     }
 
-    fun registerFaaS(tf: TinyFaasClient, funcs: List<String>) {
-        faasRegistery += mapOf(tf to funcs)
+    fun registerFaaS(tf: TinyFaasClient) {
+        faasRegistry += tf
+        val funcs: MutableSet<GeoFaaSFunction> = tf.functions
         logger.info("registered a new FaaS with serving funcs: $funcs")
+        registerFunctions(funcs)
+        logger.info("new FaaS's functions have been registered")
     }
 
-    suspend fun handleIncomingRequest() {
-        val newMsg = geobroker.listen()
+    suspend fun handleNextRequest() {
+        val newMsg = geobroker.listen() // blocking
         if (newMsg != null) {
             if (newMsg.funcAction == FunctionAction.CALL) {
-                if (registeredFunctions.filter { it.name == newMsg.funcName }.any()){
-                    val response = bestAvailFaaS(newMsg.funcName).call(newMsg.funcName, newMsg.data)
+                // TODO: send an ack
+                val registeredFunctionsName: List<String> = faasRegistry.flatMap { tf -> tf.functions.map { func -> func.name } }.distinct()
+                if (newMsg.funcName in registeredFunctionsName){ // I will not check if the request is for a subscribed topic (function), because geobroker won't deliver it
+                    val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName)
+                    val response = selectedFaaS.call(newMsg.funcName, newMsg.data)
                     logger.debug("FaaS Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
-                    // TODO: send ack
-                    val responseBody: String = response.body()
-                    geobroker.sendResult(newMsg.funcName, responseBody)
-                    logger.info("sent the result '{}' to functions/${newMsg.funcName}/result topic", responseBody) //Found 1229 primes under 10000
+                    // TODO: if connection is refused, publish a nack
+                    if (response != null) {
+                        val responseBody: String = response.body()
+                        geobroker.sendResult(newMsg.funcName, responseBody)
+                        logger.info("sent the result '{}' to functions/${newMsg.funcName}/result topic", responseBody) //Found 1229 primes under 10000
+                    } else {
+                        /// TODO: handle here
+                    }
                 } else {
-                    logger.fatal("No FaaS is serving the function ${newMsg.funcName}!")
+                    logger.fatal("No FaaS is serving the '${newMsg.funcName}' function!")
+                    //TODO send a NAck?
                 }
-            } // FunctionAction is not a CALL
+            } else {
+                logger.error("The new request is not a CALL, but a ${newMsg.funcAction}!")
+            }
         }
     }
     fun terminate() {
         geobroker.terminate()
-        registeredFunctions.clear()
+        faasRegistry.clear()
     }
     private fun bestAvailFaaS(funcName: String): TinyFaasClient {
-        val availableServers = faasRegistery.filter { it.value.contains(funcName) }
-        return availableServers.entries.first().key
+        val availableServers: List<TinyFaasClient> = faasRegistry.filter { tf -> tf.isServingFunction(funcName) }
+        return availableServers.first() // TODO: choose between FaaS servers
     }
-    // Methods
-        // runningFunctions: list the functions on tinyFaaS
-        // registeredFunctions: list of registered f (could be running or not)
-        // update and remove registeredFunctions if the no faas is serving: mutableMap.remove("Key1") // delete existing value
 }
 
 suspend fun main() {
-    val tf = TinyFaasClient("localhost", 8000)
     val gf = GeoFaaS // singleton
-    val sampleFuncName: String = "sieve"
+    val sampleFuncNames = mutableSetOf(GeoFaaSFunction("sieve"))
+    val tf = TinyFaasClient("localhost", 8000, sampleFuncNames)
 
-    gf.registerFaaS(tf, listOf(sampleFuncName))
-    gf.registerFunction(sampleFuncName)
+    gf.registerFaaS(tf) //TODO: change the functions list to tf.funcList()
     repeat(1){
-        gf.handleIncomingRequest() //TODO: call in a coroutine? or a main thread
+        gf.handleNextRequest() //TODO: call in a coroutine? or a separate thread
     }
     gf.terminate()
 }
