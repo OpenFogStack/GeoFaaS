@@ -13,7 +13,7 @@ import org.apache.logging.log4j.LogManager
 // https://ktor.io/docs/response.html
 
 //Note: management API is on the 8080 port, Thus, CANNOT run two instances on the same ip
-class TinyFaasClient (private val host: String, val port: Int, var functions: MutableSet<GeoFaaSFunction> = mutableSetOf<GeoFaaSFunction>()) {
+class TinyFaasClient (val host: String, val port: Int, var functions: MutableSet<GeoFaaSFunction> = mutableSetOf<GeoFaaSFunction>()) {
      // Note: this is local
     private val logger = LogManager.getLogger()
     //FIXME: on init: check host:port if tinyFaaS is online and 'connection refused' won't happen

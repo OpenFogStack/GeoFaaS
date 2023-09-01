@@ -35,21 +35,22 @@ object GeoFaaS {
             if (newMsg.funcAction == FunctionAction.CALL) {
                 geobroker.sendAck(newMsg.funcName) // tell the client you received its request
                 val registeredFunctionsName: List<String> = faasRegistry.flatMap { tf -> tf.functions.map { func -> func.name } }.distinct()
-                if (newMsg.funcName in registeredFunctionsName){ // I will not check if the request is for a subscribed topic (function), because geobroker won't deliver it
+                if (newMsg.funcName in registeredFunctionsName){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
                     val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName)
                     val response = selectedFaaS.call(newMsg.funcName, newMsg.data)
                     logger.debug("FaaS Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
-                    // TODO: if connection is refused, publish a nack
+
                     if (response != null) {
                         val responseBody: String = response.body()
                         geobroker.sendResult(newMsg.funcName, responseBody)
                         logger.info("sent the result '{}' to functions/${newMsg.funcName}/result topic", responseBody) // wiki: Found 1229 primes under 10000
-                    } else {
-                        /// TODO: handle here
+                    } else { // connection refused?
+                        logger.error("No response from the FaaS with '${selectedFaaS.host}' address for the function call '${newMsg.funcName}'")
+                        geobroker.sendNack(newMsg.funcName, newMsg.data)
                     }
                 } else {
                     logger.fatal("No FaaS is serving the '${newMsg.funcName}' function!")
-                    //TODO send a NAck?
+                    geobroker.sendNack(newMsg.funcName, newMsg.data)
                 }
             } else {
                 logger.error("The new request is not a CALL, but a ${newMsg.funcAction}!")

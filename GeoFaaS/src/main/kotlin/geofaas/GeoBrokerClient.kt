@@ -43,7 +43,6 @@ class GeoBrokerClient(val location: Location = Location(0.0,0.0), debug: Boolean
                     this.terminate()
                 }
             }
-            //TODO: subscribe to functions/f/ack?
         } else {
             logger.error("already subscribed to the '$funcName'")
         }
@@ -52,7 +51,7 @@ class GeoBrokerClient(val location: Location = Location(0.0,0.0), debug: Boolean
     fun listen(): FunctionMessage? {
         // function call
         logger.info("Listening to the geoBroker server...")
-        val msg = client.receive()
+        val msg = client.receive() // blocking
         logger.info("new geoBroker msg: {}", msg)
         if (msg is Payload.PUBLISHPayload) {
 // wiki:    msg.topic    => Topic(topic=functions/f1/call)
@@ -91,15 +90,15 @@ class GeoBrokerClient(val location: Location = Location(0.0,0.0), debug: Boolean
     fun sendAck(funcName: String) {
         client.send(Payload.PUBLISHPayload(Topic("functions/$funcName/ack"),Geofence.circle(location,2.0), "$funcName"))
         val msg = client.receive()
-        logger.info("Received geoBroker's answer for ACK: {}", msg)
+        logger.info("Received geoBroker's answer for publishing ack ACK: {}", msg)
         // TODO: check if reasonCode is okay. log error if not.
     }
 
     // publishes a NotAck to offload to the cloud
-    fun sendNack(funcName: String) {
-        client.send(Payload.PUBLISHPayload(Topic("functions/$funcName/nack"),Geofence.circle(location,2.0), "$funcName"))
+    fun sendNack(funcName: String, data: String) { // piggyback the data to the nack
+        client.send(Payload.PUBLISHPayload(Topic("functions/$funcName/nack"),Geofence.circle(location,2.0), data))
         val msg = client.receive()
-        logger.info("Received geoBroker's answer for NACK: {}", msg)
+        logger.info("Received geoBroker's answer for publishing NACK: {}", msg)
         // TODO: check if reasonCode is okay. log error if not.
     }
 
