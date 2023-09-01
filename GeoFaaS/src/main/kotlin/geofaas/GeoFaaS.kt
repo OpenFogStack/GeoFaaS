@@ -33,7 +33,7 @@ object GeoFaaS {
         val newMsg = geobroker.listen() // blocking
         if (newMsg != null) {
             if (newMsg.funcAction == FunctionAction.CALL) {
-                // TODO: send an ack
+                geobroker.sendAck(newMsg.funcName) // tell the client you received its request
                 val registeredFunctionsName: List<String> = faasRegistry.flatMap { tf -> tf.functions.map { func -> func.name } }.distinct()
                 if (newMsg.funcName in registeredFunctionsName){ // I will not check if the request is for a subscribed topic (function), because geobroker won't deliver it
                     val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName)
@@ -43,7 +43,7 @@ object GeoFaaS {
                     if (response != null) {
                         val responseBody: String = response.body()
                         geobroker.sendResult(newMsg.funcName, responseBody)
-                        logger.info("sent the result '{}' to functions/${newMsg.funcName}/result topic", responseBody) //Found 1229 primes under 10000
+                        logger.info("sent the result '{}' to functions/${newMsg.funcName}/result topic", responseBody) // wiki: Found 1229 primes under 10000
                     } else {
                         /// TODO: handle here
                     }
@@ -71,7 +71,7 @@ suspend fun main() {
     val sampleFuncNames = mutableSetOf(GeoFaaSFunction("sieve"))
     val tf = TinyFaasClient("localhost", 8000, sampleFuncNames)
 
-    gf.registerFaaS(tf) //TODO: change the functions list to tf.funcList()
+    gf.registerFaaS(tf)
     repeat(1){
         gf.handleNextRequest() //TODO: call in a coroutine? or a separate thread
     }

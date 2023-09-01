@@ -87,9 +87,19 @@ class GeoBrokerClient(val location: Location = Location(0.0,0.0), debug: Boolean
         }
     }
 
-    // publishes an Acknowledgement for receiving and processing a request
+    // publishes an Acknowledgement for receiving a client's request. the client listens to it
     fun sendAck(funcName: String) {
-        // TODO: I got your request! Send an ack on "functions/$funcName/ack"
+        client.send(Payload.PUBLISHPayload(Topic("functions/$funcName/ack"),Geofence.circle(location,2.0), "$funcName"))
+        val msg = client.receive()
+        logger.info("Received geoBroker's answer for ACK: {}", msg)
+        // TODO: check if reasonCode is okay. log error if not.
+    }
+
+    // publishes a NotAck to offload to the cloud
+    fun sendNack(funcName: String) {
+        client.send(Payload.PUBLISHPayload(Topic("functions/$funcName/nack"),Geofence.circle(location,2.0), "$funcName"))
+        val msg = client.receive()
+        logger.info("Received geoBroker's answer for NACK: {}", msg)
         // TODO: check if reasonCode is okay. log error if not.
     }
 
