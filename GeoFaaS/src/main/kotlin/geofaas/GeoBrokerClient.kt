@@ -60,7 +60,7 @@ class GeoBrokerClient(val location: Location = Location(0.0,0.0), debug: Boolean
             val topic = msg.topic.topic.split("/")
             if(topic.first() == "functions") {
                 val funcName = topic[1]
-                val funcAction = topic[2].uppercase() //NOTE: don't replace with .last()
+                val funcAction = topic[2].uppercase() //NOTE: [2] supposed to be last word, but don't replace with .last()
                 return FunctionMessage(funcName, FunctionAction.valueOf(funcAction), msg.content)
             } else {
                 logger.error("msg is not related to the functions! {}", msg.topic.topic)

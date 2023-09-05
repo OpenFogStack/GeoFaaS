@@ -13,7 +13,7 @@ import org.apache.logging.log4j.LogManager
 // https://ktor.io/docs/response.html
 
 //Note: management API is on the 8080 port, Thus, CANNOT run two instances on the same ip
-class TinyFaasClient (val host: String, val port: Int, var functions: MutableSet<GeoFaaSFunction> = mutableSetOf<GeoFaaSFunction>()) {
+class TinyFaasClient (val host: String, val port: Int, private var functionsLocal: Set<GeoFaaSFunction> = mutableSetOf()) {
      // Note: this is local
     private val logger = LogManager.getLogger()
     //FIXME: on init: check host:port if tinyFaaS is online and 'connection refused' won't happen
@@ -33,15 +33,24 @@ class TinyFaasClient (val host: String, val port: Int, var functions: MutableSet
         return null
     }
 
-    suspend fun funcList(): HttpResponse {
-        return client.get("http://$host:8080/list")
-    } // TODO: handle multiple line output from tinyFaaS. what is the format?
-
+    suspend fun functions () : Set<GeoFaaSFunction> { // NOTE: could cause performance issue later
+        functionsLocal = remoteFunctions() //FIXME: should update (append/remove) CALL subscriptions in geoBroker
+        return functionsLocal
+    }
     fun isServingFunction(funcName: String): Boolean {
-        return funcName in functions.map { it.name }
+        return funcName in functionsLocal.map { it.name }
     }
 
-    private fun respValidator(resp: HttpResponse): Error? {
+    suspend fun remoteFunctions(): Set<GeoFaaSFunction> {
+        // TODO: try catch connection refused
+        val resp = client.get("http://$host:8080/list")
+        val body = resp.body<String>()
+        val funcs = body.split("\n").filter { it.isNotBlank() }
+        return funcs.map { name -> GeoFaaSFunction(name) }.toSet()
+    }
+
+
+    private fun respValidator(resp: HttpResponse): Error? { // TODO: to be used instead of builtin "expectSuccess = true"
         if (resp.status.value in 200..299) {
             return null
         }

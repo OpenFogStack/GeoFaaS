@@ -9,7 +9,7 @@ object GeoFaaS {
     private val logger = LogManager.getLogger()
     private val geobroker = GeoBrokerClient(debug = true)
     private var faasRegistry = mutableListOf<TinyFaasClient>()
-    fun registerFunctions(functions: Set<GeoFaaSFunction>) {
+    fun registerFunctions(functions: Set<GeoFaaSFunction>) { //FIXME: should update CALL subscriptions in geoBroker when remote FaaS changed
         val subscribedFunctionsName = geobroker.subscribedFunctionsList().distinct() // distinct removes duplicates
         functions.forEach { func ->
             if ( func.name in subscribedFunctionsName) {
@@ -21,12 +21,18 @@ object GeoFaaS {
         }
     }
 
-    fun registerFaaS(tf: TinyFaasClient) {
+    suspend fun registerFaaS(tf: TinyFaasClient) {
         faasRegistry += tf
-        val funcs: MutableSet<GeoFaaSFunction> = tf.functions
-        logger.info("registered a new FaaS with serving funcs: $funcs")
-        registerFunctions(funcs)
-        logger.info("new FaaS's functions have been registered")
+        val funcs: Set<GeoFaaSFunction> = tf.functions()
+        if (funcs.isNotEmpty()) {
+            logger.info("registered a new FaaS with serving funcs: $funcs")
+            registerFunctions(funcs)
+            logger.info("new FaaS's functions have been registered")
+        } else {
+            logger.warn("registered a new FaaS with no serving functions!")
+        }
+
+
     }
 
     suspend fun handleNextRequest() {
@@ -34,7 +40,7 @@ object GeoFaaS {
         if (newMsg != null) {
             if (newMsg.funcAction == FunctionAction.CALL) {
                 geobroker.sendAck(newMsg.funcName) // tell the client you received its request
-                val registeredFunctionsName: List<String> = faasRegistry.flatMap { tf -> tf.functions.map { func -> func.name } }.distinct()
+                val registeredFunctionsName: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
                 if (newMsg.funcName in registeredFunctionsName){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
                     val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName)
                     val response = selectedFaaS.call(newMsg.funcName, newMsg.data)
@@ -54,6 +60,8 @@ object GeoFaaS {
                 }
             } else {
                 logger.error("The new request is not a CALL, but a ${newMsg.funcAction}!")
+                // TODO ADD, NACK
+
             }
         }
     }
