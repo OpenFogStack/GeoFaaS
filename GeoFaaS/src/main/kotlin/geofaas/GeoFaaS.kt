@@ -1,5 +1,7 @@
 package geofaas
 
+import de.hasenburg.geobroker.commons.model.spatial.Geofence
+import de.hasenburg.geobroker.commons.model.spatial.Location
 import io.ktor.client.call.*
 import org.apache.logging.log4j.LogManager
 import geofaas.Model.FunctionAction
@@ -7,15 +9,15 @@ import geofaas.Model.GeoFaaSFunction
 
 object GeoFaaS {
     private val logger = LogManager.getLogger()
-    private val geobroker = GeoBrokerClient(debug = true)
+    private val gbClient = GBClientEdge(Location(0.0,0.0), true)
     private var faasRegistry = mutableListOf<TinyFaasClient>()
-    fun registerFunctions(functions: Set<GeoFaaSFunction>) { //FIXME: should update CALL subscriptions in geoBroker when remote FaaS changed
-        val subscribedFunctionsName = geobroker.subscribedFunctionsList().distinct() // distinct removes duplicates
+    fun registerFunctions(functions: Set<GeoFaaSFunction>) { //FIXME: should update CALL subscriptions in geoBroker when remote FaaS added/removed serving function
+        val subscribedFunctionsName = gbClient.subscribedFunctionsList().distinct() // distinct removes duplicates
         functions.forEach { func ->
-            if ( func.name in subscribedFunctionsName) {
-                logger.debug("GeoFaaS already listens to '${func.name}' function calls")
+            if (func.name in subscribedFunctionsName) {
+                logger.debug("GeoFaaS already subscribed to '${func.name}' function calls")
             } else {
-                geobroker.subscribeFunction(func.name) //FIXME: check if subscribe was successful
+                gbClient.subscribeFunction(func.name, Geofence.circle(Location(0.0, 0.0), 2.0)) //FIXME: check if subscribe was successful
                 logger.info("function '${func.name}' registered to the GeoFaaS, and will be served for the new requests")
             }
         }
@@ -25,21 +27,19 @@ object GeoFaaS {
         faasRegistry += tf
         val funcs: Set<GeoFaaSFunction> = tf.functions()
         if (funcs.isNotEmpty()) {
-            logger.info("registered a new FaaS with serving funcs: $funcs")
+            logger.info("registered a new FaaS. Now registering its serving funcs: $funcs")
             registerFunctions(funcs)
             logger.info("new FaaS's functions have been registered")
         } else {
             logger.warn("registered a new FaaS with no serving functions!")
         }
-
-
     }
 
     suspend fun handleNextRequest() {
-        val newMsg = geobroker.listen() // blocking
+        val newMsg = gbClient.listen() // blocking
         if (newMsg != null) {
             if (newMsg.funcAction == FunctionAction.CALL) {
-                geobroker.sendAck(newMsg.funcName) // tell the client you received its request
+                gbClient.sendAck(newMsg.funcName) // tell the client you received its request
                 val registeredFunctionsName: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
                 if (newMsg.funcName in registeredFunctionsName){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
                     val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName)
@@ -48,25 +48,24 @@ object GeoFaaS {
 
                     if (response != null) {
                         val responseBody: String = response.body()
-                        geobroker.sendResult(newMsg.funcName, responseBody)
+                        gbClient.sendResult(newMsg.funcName, responseBody)
                         logger.info("sent the result '{}' to functions/${newMsg.funcName}/result topic", responseBody) // wiki: Found 1229 primes under 10000
                     } else { // connection refused?
                         logger.error("No response from the FaaS with '${selectedFaaS.host}' address for the function call '${newMsg.funcName}'")
-                        geobroker.sendNack(newMsg.funcName, newMsg.data)
+                        gbClient.sendNack(newMsg.funcName, newMsg.data)
                     }
                 } else {
                     logger.fatal("No FaaS is serving the '${newMsg.funcName}' function!")
-                    geobroker.sendNack(newMsg.funcName, newMsg.data)
+                    gbClient.sendNack(newMsg.funcName, newMsg.data)
                 }
             } else {
                 logger.error("The new request is not a CALL, but a ${newMsg.funcAction}!")
                 // TODO ADD, NACK
-
             }
         }
     }
     fun terminate() {
-        geobroker.terminate()
+        gbClient.terminate()
         faasRegistry.clear()
     }
     private fun bestAvailFaaS(funcName: String): TinyFaasClient {
@@ -77,8 +76,8 @@ object GeoFaaS {
 
 suspend fun main() {
     val gf = GeoFaaS // singleton
-    val sampleFuncNames = mutableSetOf(GeoFaaSFunction("sieve"))
-    val tf = TinyFaasClient("localhost", 8000, sampleFuncNames)
+//    val sampleFuncNames = mutableSetOf(GeoFaaSFunction("sieve")) // could be removed
+    val tf = TinyFaasClient("localhost", 8000)//, sampleFuncNames)
 
     gf.registerFaaS(tf)
     repeat(1){

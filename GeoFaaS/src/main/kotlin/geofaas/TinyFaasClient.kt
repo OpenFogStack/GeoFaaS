@@ -33,7 +33,7 @@ class TinyFaasClient (val host: String, val port: Int, private var functionsLoca
         return null
     }
 
-    suspend fun functions () : Set<GeoFaaSFunction> { // NOTE: could cause performance issue later
+    suspend fun functions() : Set<GeoFaaSFunction> { // NOTE: could cause performance issue later
         functionsLocal = remoteFunctions() //FIXME: should update (append/remove) CALL subscriptions in geoBroker
         return functionsLocal
     }
