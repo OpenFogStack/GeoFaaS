@@ -7,11 +7,13 @@ import de.hasenburg.geobroker.commons.model.message.ReasonCode
 import de.hasenburg.geobroker.commons.model.message.Topic
 import de.hasenburg.geobroker.commons.model.spatial.Geofence
 import de.hasenburg.geobroker.commons.model.spatial.Location
+import de.hasenburg.geobroker.commons.model.spatial.toJson
 import de.hasenburg.geobroker.commons.setLogLevel
 import geofaas.Model.FunctionAction
 import geofaas.Model.FunctionMessage
 import geofaas.Model.ListeningTopic
 import geofaas.Model.ClientType
+import kotlinx.serialization.json.Json
 import org.apache.logging.log4j.Level
 import org.apache.logging.log4j.LogManager
 
@@ -30,11 +32,6 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
         // TODO: Check if this is success else error and terminate
     }
 
-//    fun subscribeFunction(funcName: String) { // strategy pattern
-//        val newTopics = subscribeFunctionBehavior.subscribeFunction(funcName, remoteGeoBroker, location, listeningTopics)
-//        newTopics.forEach {  listeningTopics.add(it) }
-//    }
-
     fun subscribeFunction(funcName: String, fence: Geofence) {
         var newTopics: MutableSet<ListeningTopic> = mutableSetOf()
         var baseTopic = "functions/$funcName"
@@ -50,14 +47,12 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
                 baseTopic += "/nack"; functionAction = FunctionAction.NACK
             }
         }
-        val newTopic = Topic(baseTopic)
-        val newSubscribe = subscribe(newTopic, fence, functionAction) //subscribe(baseTopic, fence, functionAction)
-        if (newSubscribe != null) { newTopics.add(ListeningTopic(newTopic, fence)) }
+        val topic = Topic(baseTopic)
+        val newSubscribe = subscribe(topic, fence, functionAction) //subscribe(baseTopic, fence, functionAction)
+        if (newSubscribe != null) { newTopics.add(ListeningTopic(topic, fence)) }
         logger.debug("new topic: {}", newSubscribe)
 
         if (mode == ClientType.CLIENT) { // Client subscribes to two topics
-//            baseTopic.topic = baseTopic.topic.dropLast(7) // remove '/result'
-//            baseTopic.topic += "/ack"
             val ackTopic = Topic("functions/$funcName/ack")
             val ackSubscribe = subscribe(ackTopic, fence, functionAction)
             if (ackSubscribe != null) { newTopics.add(ListeningTopic(ackTopic, fence)) }
@@ -98,13 +93,15 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
             if(topic.first() == "functions") {
                 val funcName = topic[1]
                 val funcAction = topic[2].uppercase() //NOTE: [2] supposed to be last word, but don't replace with .last()
-                return FunctionMessage(funcName, FunctionAction.valueOf(funcAction), msg.content)
+                val message = Json.decodeFromString(FunctionMessage.serializer(), msg.content)
+                return message
+//                return FunctionMessage(funcName, FunctionAction.valueOf(funcAction), msg.content, Model.TypeCode.Piggy)
             } else {
                 logger.error("msg is not related to the functions! {}", msg.topic.topic)
                 return null
             }
         } else {
-            logger.error("Unexpected geoBroker message $msg")
+            logger.error("Unexpected geoBroker message (not a PUBLISHPayload): $msg")
             return null
         }
     }
@@ -133,18 +130,3 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
         return listeningTopics.map { pair -> pair.topic.topic }.any { it == topic }
      }
 }
-
-//interface SubscribeFunctionBehavior {
-////    fun subscribeFunction(funcName: String, remoteGeoBroker: SimpleClient, location: Location)
-//    fun subscribeFunction(funcName: String, remoteGeoBroker: SimpleClient, location: Location, listeningTopics: MutableSet<Pair<Topic, Geofence>>) :MutableSet<Pair<Topic, Geofence>>
-//}
-
-
-
-//fun main() {
-//    val f1 = GeoBrokerClient()
-//    f1.subscribeFunction("f1")
-//    f1.listen("f1") //TODO: call in a coroutine
-//    f1.listen("f1")
-//    f1.terminate()
-//}

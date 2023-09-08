@@ -7,7 +7,7 @@ import org.apache.logging.log4j.LogManager
 import geofaas.Model.FunctionAction
 import geofaas.Model.GeoFaaSFunction
 
-object GeoFaaS {
+object GeoFaaSEdge {
     private val logger = LogManager.getLogger()
     private val gbClient = GBClientEdge(Location(0.0,0.0), true)
     private var faasRegistry = mutableListOf<TinyFaasClient>()
@@ -75,7 +75,7 @@ object GeoFaaS {
 }
 
 suspend fun main() {
-    val gf = GeoFaaS // singleton
+    val gf = GeoFaaSEdge // singleton
 //    val sampleFuncNames = mutableSetOf(GeoFaaSFunction("sieve")) // could be removed
     val tf = TinyFaasClient("localhost", 8000)//, sampleFuncNames)
 

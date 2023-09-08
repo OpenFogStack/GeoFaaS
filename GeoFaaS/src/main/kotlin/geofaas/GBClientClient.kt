@@ -6,18 +6,20 @@ import de.hasenburg.geobroker.commons.model.message.Topic
 import de.hasenburg.geobroker.commons.model.spatial.Geofence
 import de.hasenburg.geobroker.commons.model.spatial.Location
 import de.hasenburg.geobroker.commons.sleepNoLog
-import org.apache.logging.log4j.LogManager
-import geofaas.Model.FunctionMessage
-import geofaas.Model.FunctionAction
 import geofaas.Model.ClientType
+import geofaas.Model.FunctionAction
+import geofaas.Model.FunctionMessage
 import geofaas.Model.TypeCode
+import kotlinx.serialization.json.Json
+import org.apache.logging.log4j.LogManager
 
 private val logger = LogManager.getLogger()
 
 class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSClient1"): GeoBrokerClient(loc, ClientType.CLIENT, debug, host, port, id) {
     fun callFunction(funcName: String, data: String) {
         subscribeFunction(funcName, Geofence.circle(Location(0.0, 0.0), 2.0))
-        remoteGeoBroker.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call"), Geofence.circle(location,2.0), data))
+        val message = Json.encodeToString(FunctionMessage.serializer(), FunctionMessage(funcName, FunctionAction.CALL, data, TypeCode.NORMAL))
+        remoteGeoBroker.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call"), Geofence.circle(location,2.0), message))
         val pubAck = remoteGeoBroker.receive()
         logger.info("GeoBroker's Publish ACK by ${mode.name} for the $funcName CALL: {}", pubAck)
         if (pubAck is Payload.PUBACKPayload && pubAck.reasonCode == ReasonCode.NoMatchingSubscribers) { return }
@@ -32,7 +34,7 @@ class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", 
                     TypeCode.NORMAL -> {
                         res = listen()
                     }
-                    TypeCode.Piggy -> {
+                    TypeCode.PIGGY -> {
                         //TODO: Implement if Ack is piggybacked
                     }
                 }
