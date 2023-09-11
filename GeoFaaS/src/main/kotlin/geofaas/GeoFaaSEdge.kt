@@ -76,8 +76,7 @@ object GeoFaaSEdge {
 
 suspend fun main() {
     val gf = GeoFaaSEdge // singleton
-//    val sampleFuncNames = mutableSetOf(GeoFaaSFunction("sieve")) // could be removed
-    val tf = TinyFaasClient("localhost", 8000)//, sampleFuncNames)
+    val tf = TinyFaasClient("localhost", 8000)
 
     gf.registerFaaS(tf)
     repeat(1){

@@ -19,8 +19,8 @@
     </modules>
 
     <properties>
-        <kotlin.version>1.7.0</kotlin.version>
-        <serialization.version>1.2.1</serialization.version>
+        <kotlin.version>1.7.20</kotlin.version>
+        <serialization.version>1.2.2</serialization.version>
         <kotlin.compiler.jvmTarget>11</kotlin.compiler.jvmTarget>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
@@ -136,7 +136,6 @@
             <artifactId>kotlinx-serialization-json</artifactId>
             <version>${serialization.version}</version>
         </dependency>
-        <!-- End Kotlin -->
         <dependency>
             <groupId>org.zeromq</groupId>
             <artifactId>jeromq</artifactId>

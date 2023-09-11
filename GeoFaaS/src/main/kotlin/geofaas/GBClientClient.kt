@@ -1,5 +1,6 @@
 package geofaas
 
+import com.google.gson.Gson
 import de.hasenburg.geobroker.commons.model.message.Payload
 import de.hasenburg.geobroker.commons.model.message.ReasonCode
 import de.hasenburg.geobroker.commons.model.message.Topic
@@ -18,7 +19,7 @@ private val logger = LogManager.getLogger()
 class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSClient1"): GeoBrokerClient(loc, ClientType.CLIENT, debug, host, port, id) {
     fun callFunction(funcName: String, data: String) {
         subscribeFunction(funcName, Geofence.circle(Location(0.0, 0.0), 2.0))
-        val message = Json.encodeToString(FunctionMessage.serializer(), FunctionMessage(funcName, FunctionAction.CALL, data, TypeCode.NORMAL))
+        val message = gson.toJson(FunctionMessage(funcName, FunctionAction.CALL, data, TypeCode.NORMAL))
         remoteGeoBroker.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call"), Geofence.circle(location,2.0), message))
         val pubAck = remoteGeoBroker.receive()
         logger.info("GeoBroker's Publish ACK by ${mode.name} for the $funcName CALL: {}", pubAck)

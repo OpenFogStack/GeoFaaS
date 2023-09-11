@@ -8,9 +8,9 @@ A middleware between [Geobroker](https://github.com/MoeweX/geobroker) (or DisGB)
 sudo apt update
 sudo apt install -y neovim
 ```
-### `tmux` for remote administrations
+### `java`, and `tmux` for remote administrations
 ```
-sudo apt install libavutil-dev tmux
+sudo apt install libavutil-dev tmux default-jdk
 ```
 
 ### Golang 1.20.6
@@ -36,7 +36,8 @@ cd tinyFaas & make
 git clone https://github.com/ChaosRez/geoFaaS.git # to be completed
 ```
 ## Dependencies
-Kotlin 1.7.0  
+Kotlin 1.7.20
 Maven
 Ktor
+JVM
 [Go 1.20.6](https://go.dev/dl/go1.20.6.linux-arm64.tar.gz) (for tinyFaaS)  

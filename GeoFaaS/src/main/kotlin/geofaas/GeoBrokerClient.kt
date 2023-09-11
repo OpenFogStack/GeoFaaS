@@ -1,5 +1,6 @@
 package geofaas
 
+import com.google.gson.Gson
 import de.hasenburg.geobroker.client.main.SimpleClient
 import de.hasenburg.geobroker.commons.communication.ZMQProcessManager
 import de.hasenburg.geobroker.commons.model.message.Payload
@@ -25,6 +26,7 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
     private var listeningTopics = mutableSetOf<ListeningTopic>()
     private val processManager = ZMQProcessManager()
     val remoteGeoBroker = SimpleClient(host, port, identity = id)
+    val gson = Gson()
     init {
         if (debug) { setLogLevel(logger, Level.DEBUG) }
         remoteGeoBroker.send(Payload.CONNECTPayload(location)) // connect //FIXME: location of the client?
@@ -91,9 +93,7 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
 // wiki:    msg.geofence => BUFFER (POINT (0 0), 2)
             val topic = msg.topic.topic.split("/")
             if(topic.first() == "functions") {
-                val funcName = topic[1]
-                val funcAction = topic[2].uppercase() //NOTE: [2] supposed to be last word, but don't replace with .last()
-                val message = Json.decodeFromString(FunctionMessage.serializer(), msg.content)
+                val message = gson.fromJson(msg.content, FunctionMessage::class.java)
                 return message
 //                return FunctionMessage(funcName, FunctionAction.valueOf(funcAction), msg.content, Model.TypeCode.Piggy)
             } else {
