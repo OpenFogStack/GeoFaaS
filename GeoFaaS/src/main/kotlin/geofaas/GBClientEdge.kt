@@ -1,6 +1,5 @@
 package geofaas
 
-import com.google.gson.Gson
 import de.hasenburg.geobroker.commons.model.message.Payload
 import de.hasenburg.geobroker.commons.model.message.ReasonCode
 import de.hasenburg.geobroker.commons.model.message.Topic
@@ -10,11 +9,8 @@ import org.apache.logging.log4j.LogManager
 import geofaas.Model.FunctionMessage
 import geofaas.Model.FunctionAction
 import geofaas.Model.TypeCode
-import kotlinx.serialization.json.Json
 
-private val logger = LogManager.getLogger()
-
-class GBClientEdge(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSEdge1") :GeoBrokerClient(loc, Model.ClientType.EDGE, debug, host, port, id) {
+class GBClientEdge(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSEdgeTest") :GeoBrokerClient(loc, Model.ClientType.EDGE, debug, host, port, id) {
     // publishes result for a function request
     fun sendResult(funcName: String, res: String) { //TODO: what location to send the result?
         val message = FunctionMessage(funcName, FunctionAction.RESULT, res, TypeCode.NORMAL)
@@ -39,7 +35,7 @@ class GBClientEdge(loc: Location, debug: Boolean, host: String = "localhost", po
     }
 
     // publishes a NotAck to offload to the cloud
-    fun sendNack(funcName: String, data: String) { // piggyback the data to the nack
+    fun sendNack(funcName: String, data: String) { //TODO piggyback the data to the nack
         val message = FunctionMessage(funcName, FunctionAction.NACK, data, TypeCode.PIGGY)
         remoteGeoBroker.send(Payload.PUBLISHPayload(Topic("functions/$funcName/nack"),Geofence.circle(location,2.0), gson.toJson(message)))
         val msg = remoteGeoBroker.receive()

@@ -10,10 +10,10 @@
     <modelVersion>4.0.0</modelVersion>
 
     <properties>
-        <ktor_version>2.0.0</ktor_version>
+        <ktor_version>2.0.3</ktor_version>
     </properties>
 
-    <artifactId>GeoFaaS</artifactId>
+    <artifactId>GeoFaaSEdge</artifactId>
 
     <dependencies>
         <dependency>
@@ -98,8 +98,32 @@
                     </descriptorRefs>
                     <outputDirectory>out/</outputDirectory>
                 </configuration>
+                <executions>
+                    <execution>
+                        <id>GeoFaaS</id>
+                        <configuration>
+                            <appendAssemblyId>false</appendAssemblyId>
+                            <archive>
+                                <manifest>
+                                    <mainClass>geofaas.EdgeKt</mainClass>
+<!--                                    <mainClass>geofaas.main.MainKt</mainClass>-->
+                                </manifest>
+                                <manifestEntries>
+                                    <Multi-Release>true</Multi-Release>
+                                </manifestEntries>
+                            </archive>
+                            <descriptorRefs>
+                                <descriptorRef>jar-with-dependencies</descriptorRef>
+                            </descriptorRefs>
+                            <finalName>GeoFaaSEdge</finalName>
+                        </configuration>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
-
 </project>

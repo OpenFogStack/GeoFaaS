@@ -7,28 +7,28 @@ import org.apache.logging.log4j.LogManager
 import geofaas.Model.FunctionAction
 import geofaas.Model.GeoFaaSFunction
 
-object GeoFaaSEdge {
+class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSEdge1") {
     private val logger = LogManager.getLogger()
-    private val gbClient = GBClientEdge(Location(0.0,0.0), true)
+    private val gbClient = GBClientEdge(loc, debug, host, port, id)
     private var faasRegistry = mutableListOf<TinyFaasClient>()
-    fun registerFunctions(functions: Set<GeoFaaSFunction>) { //FIXME: should update CALL subscriptions in geoBroker when remote FaaS added/removed serving function
+    fun registerFunctions(functions: Set<GeoFaaSFunction>, fence: Geofence) { //FIXME: should update CALL subscriptions in geoBroker when remote FaaS added/removed serving function
         val subscribedFunctionsName = gbClient.subscribedFunctionsList().distinct() // distinct removes duplicates
         functions.forEach { func ->
             if (func.name in subscribedFunctionsName) {
                 logger.debug("GeoFaaS already subscribed to '${func.name}' function calls")
             } else {
-                gbClient.subscribeFunction(func.name, Geofence.circle(Location(0.0, 0.0), 2.0)) //FIXME: check if subscribe was successful
+                gbClient.subscribeFunction(func.name, fence) //FIXME: check if subscribe was successful
                 logger.info("function '${func.name}' registered to the GeoFaaS, and will be served for the new requests")
             }
         }
     }
 
-    suspend fun registerFaaS(tf: TinyFaasClient) {
+    suspend fun registerFaaS(tf: TinyFaasClient, fence: Geofence) {
         faasRegistry += tf
         val funcs: Set<GeoFaaSFunction> = tf.functions()
         if (funcs.isNotEmpty()) {
             logger.info("registered a new FaaS. Now registering its serving funcs: $funcs")
-            registerFunctions(funcs)
+            registerFunctions(funcs, fence)
             logger.info("new FaaS's functions have been registered")
         } else {
             logger.warn("registered a new FaaS with no serving functions!")
@@ -75,10 +75,12 @@ object GeoFaaSEdge {
 }
 
 suspend fun main() {
-    val gf = GeoFaaSEdge // singleton
+    val frankfurtLoc = Location(50.106732,8.663124) // same as frankfurt (broker are: radius: 2.1)
+    val gf = Edge(frankfurtLoc, true, "localhost", 5559)
     val tf = TinyFaasClient("localhost", 8000)
+//    val tf = TinyFaasClient("192.168.100.144", 8000) // home raspberry
 
-    gf.registerFaaS(tf)
+    gf.registerFaaS(tf, Geofence.world())//Geofence.circle(frankfurtLoc, 500.0))
     repeat(1){
         gf.handleNextRequest() //TODO: call in a coroutine? or a separate thread
     }

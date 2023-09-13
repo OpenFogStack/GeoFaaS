@@ -8,25 +8,22 @@ import de.hasenburg.geobroker.commons.model.message.ReasonCode
 import de.hasenburg.geobroker.commons.model.message.Topic
 import de.hasenburg.geobroker.commons.model.spatial.Geofence
 import de.hasenburg.geobroker.commons.model.spatial.Location
-import de.hasenburg.geobroker.commons.model.spatial.toJson
 import de.hasenburg.geobroker.commons.setLogLevel
 import geofaas.Model.FunctionAction
 import geofaas.Model.FunctionMessage
 import geofaas.Model.ListeningTopic
 import geofaas.Model.ClientType
-import kotlinx.serialization.json.Json
 import org.apache.logging.log4j.Level
 import org.apache.logging.log4j.LogManager
 
-private val logger = LogManager.getLogger()
-
 // Basic Geobroker client for GeoFaaS system
-abstract class GeoBrokerClient(val location: Location, val mode: ClientType, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaS") {
+abstract class GeoBrokerClient(val location: Location, val mode: ClientType, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSAbstract") {
 
     private var listeningTopics = mutableSetOf<ListeningTopic>()
     private val processManager = ZMQProcessManager()
     val remoteGeoBroker = SimpleClient(host, port, identity = id)
     val gson = Gson()
+    val logger = LogManager.getLogger()
     init {
         if (debug) { setLogLevel(logger, Level.DEBUG) }
         remoteGeoBroker.send(Payload.CONNECTPayload(location)) // connect //FIXME: location of the client?
