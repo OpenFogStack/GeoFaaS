@@ -12,14 +12,16 @@ import geofaas.Model.FunctionMessage
 import geofaas.Model.TypeCode
 
 class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSClient1"): GeoBrokerClient(loc, ClientType.CLIENT, debug, host, port, id) {
-    fun callFunction(funcName: String, data: String, fence: Geofence) {
-        subscribeFunction(funcName, fence)
+    fun callFunction(funcName: String, data: String, pubFence: Geofence, subFence: Geofence): String? {
+        subscribeFunction(funcName, subFence)
         val message = gson.toJson(FunctionMessage(funcName, FunctionAction.CALL, data, TypeCode.NORMAL))
-        remoteGeoBroker.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call"), Geofence.circle(location,2.0), message))
+        remoteGeoBroker.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call"), pubFence, message))
         val pubAck = remoteGeoBroker.receive()
-        val logMsg = "GeoBroker's Publish ACK by ${mode.name} for the $funcName CALL: {}"
+        val logMsg = "GeoBroker's 'Publish ACK' by ${mode.name} for the $funcName CALL: {}"
         if (pubAck is Payload.PUBACKPayload && pubAck.reasonCode == ReasonCode.NoMatchingSubscribers) {
-            logger.error("$logMsg. Terminating...", pubAck.reasonCode); return } else { logger.info(logMsg, pubAck) }
+            logger.error("$logMsg. Terminating...", pubAck.reasonCode)
+            return null
+        } else { logger.info(logMsg, pubAck) }
 
         logger.info("Listening for an ack from the server...")
         val ack: FunctionMessage? = listen()
@@ -32,13 +34,14 @@ class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", 
                         res = listen()
                     }
                     TypeCode.PIGGY -> {
-                        //TODO: Implement if Ack is piggybacked
+                        return null //TODO: Implement if Ack is piggybacked
                     }
                 }
-            } else { logger.error("expected Ack but received '{}'", ack.funcAction) }
+            } else { logger.error("expected Ack but received '{}'", ack.funcAction)}
             logger.debug("(any?) response received: {}", res)
-            //TODO return the res
+            return res.toString()
         } else { logger.error("null response received from GeoBroker! (Client.Listen())") }
+        return null
         //TODO: Unsubscribe
     }
 }
@@ -47,8 +50,8 @@ fun main() {
     val parisLoc = Location(48.877366, 2.359708)
 //    val frankfurtLocOnly = Location(50.106732,8.663124)
     val client1 = GBClientClient(parisLoc, true, "localhost", 5560)
-    val res = client1.callFunction("sieve", "", Geofence.circle(parisLoc, 10.0))
-    println(res)
+    val res = client1.callFunction("sieve", "", pubFence = Geofence.circle(parisLoc, 10.0), subFence = Geofence.circle(parisLoc, 10.0))
+    println("Result: $res")
     sleepNoLog(2000, 0)
     client1.terminate()
 }
