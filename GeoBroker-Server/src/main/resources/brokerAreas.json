@@ -1,0 +1,22 @@
+[
+	{
+		"responsibleBroker" : {
+			"brokerId" : "broker",
+			"ip" : "localhost",
+			"port" : 5559
+		},
+		"coveredArea" : {
+			"WKT" : "ENVELOPE (-180, 180, 90, -90)"
+		}
+	},
+	{
+		"responsibleBroker" : {
+			"brokerId" : "broker2",
+			"ip" : "localhost",
+			"port" : 1234
+		},
+		"coveredArea" : {
+			"WKT" : "ENVELOPE (-1, 1, 1, -1)"
+		}
+	}
+]
