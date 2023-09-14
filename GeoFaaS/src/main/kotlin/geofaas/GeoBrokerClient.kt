@@ -15,6 +15,7 @@ import geofaas.Model.ListeningTopic
 import geofaas.Model.ClientType
 import org.apache.logging.log4j.Level
 import org.apache.logging.log4j.LogManager
+import java.lang.Exception
 
 val logger = LogManager.getLogger()
 
@@ -27,9 +28,13 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
     val gson = Gson()
     init {
         if (debug) { setLogLevel(logger, Level.DEBUG) }
-        remoteGeoBroker.send(Payload.CONNECTPayload(location)) // connect //FIXME: location of the client?
-        logger.info("Received geoBroker's answer (Conn ACK): {}", remoteGeoBroker.receive())
-        // TODO: Check if this is success else error and terminate
+        remoteGeoBroker.send(Payload.CONNECTPayload(location)) // connect
+        val connAck = remoteGeoBroker.receive()
+        if (connAck is Payload.DISCONNECTPayload) {
+            logger.fatal("${connAck.reasonCode}! $id can't connect to the remote geoBroker '$host:$port'!")
+            throw RuntimeException("Error while connecting to the geoBroker")
+        }
+        logger.info("Received geoBroker's answer (Conn ACK): {}", connAck)
     }
 
     fun subscribeFunction(funcName: String, fence: Geofence): MutableSet<ListeningTopic>? {
