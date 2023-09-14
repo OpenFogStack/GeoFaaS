@@ -13,7 +13,7 @@
         <ktor_version>2.0.3</ktor_version>
     </properties>
 
-    <artifactId>GeoFaaSEdge</artifactId>
+    <artifactId>GeoFaaS</artifactId>
 
     <dependencies>
         <dependency>
@@ -106,7 +106,7 @@
                             <archive>
                                 <manifest>
                                     <mainClass>geofaas.EdgeKt</mainClass>
-<!--                                    <mainClass>geofaas.main.MainKt</mainClass>-->
+<!--                                    <mainClass>geofaas.GBClientClientkt</mainClass>-->
                                 </manifest>
                                 <manifestEntries>
                                     <Multi-Release>true</Multi-Release>
