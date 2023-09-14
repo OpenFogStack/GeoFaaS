@@ -2,12 +2,14 @@ package geofaas
 
 import de.hasenburg.geobroker.commons.model.spatial.Geofence
 import de.hasenburg.geobroker.commons.model.spatial.Location
+import de.hasenburg.geobroker.commons.model.spatial.toGeofence
 import io.ktor.client.call.*
 import org.apache.logging.log4j.LogManager
 import geofaas.Model.FunctionAction
 import geofaas.Model.GeoFaaSFunction
 import geofaas.Model.ListeningTopic
 
+val cloudFence = Geofence.world()
 class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSEdge1") {
     private val logger = LogManager.getLogger()
     private val gbClient = GBClientEdge(loc, debug, host, port, id)
@@ -52,10 +54,11 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
     }
 
     suspend fun handleNextRequest() {
-        val newMsg = gbClient.listen() // blocking
+        val newMsg :Model.FunctionMessage? = gbClient.listen() // blocking
         if (newMsg != null) {
+            val clientFence = newMsg.responseTopicFence.fence.toGeofence()
             if (newMsg.funcAction == FunctionAction.CALL) {
-                gbClient.sendAck(newMsg.funcName) // tell the client you received its request
+                gbClient.sendAck(newMsg.funcName, clientFence) // tell the client you received its request
                 val registeredFunctionsName: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
                 if (newMsg.funcName in registeredFunctionsName){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
                     val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName)
@@ -64,15 +67,15 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
 
                     if (response != null) {
                         val responseBody: String = response.body()
-                        gbClient.sendResult(newMsg.funcName, responseBody)
+                        gbClient.sendResult(newMsg.funcName, responseBody, clientFence)
                         logger.info("sent the result '{}' to functions/${newMsg.funcName}/result topic", responseBody) // wiki: Found 1229 primes under 10000
                     } else { // connection refused?
                         logger.error("No response from the FaaS with '${selectedFaaS.host}' address for the function call '${newMsg.funcName}'")
-                        gbClient.sendNack(newMsg.funcName, newMsg.data)
+                        gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence, cloudFence)
                     }
                 } else {
                     logger.fatal("No FaaS is serving the '${newMsg.funcName}' function!")
-                    gbClient.sendNack(newMsg.funcName, newMsg.data)
+                    gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence, cloudFence)
                 }
             } else {
                 logger.error("The new request is not a CALL, but a ${newMsg.funcAction}!")
