@@ -18,33 +18,42 @@ class GBClientEdge(loc: Location, debug: Boolean, host: String = "localhost", po
         val responseTopicFence = ListeningTopicPatched(null, brokerFence.toJson()) // null topic = not listening for any response
         val message = FunctionMessage(funcName, FunctionAction.RESULT, res, TypeCode.NORMAL, responseTopicFence)
         remoteGeoBroker.send(Payload.PUBLISHPayload(Topic("functions/$funcName/result"), clientFence, gson.toJson(message))) // Json.encodeToString(FunctionMessage.serializer(), message)
-        val msg = remoteGeoBroker.receive()
-        logger.info("Received geoBroker's answer: {}", msg)
-        if (msg is Payload.PUBACKPayload) {
-            if (msg.reasonCode == ReasonCode.NoMatchingSubscribers) {
-                logger.error("No matching subscriber found when sending the result for the function '$funcName'")
-            } else {
-                logger.info("result sent with reasonCode: {}", msg.reasonCode)
-            }
+        val pubAck = remoteGeoBroker.receive()
+        val logMsg = "GeoBroker's 'Publish ACK' for the '$funcName' RESULT by $id: {}"
+        if (pubAck is Payload.PUBACKPayload) {
+            val noError = logPublishAck(pubAck, logMsg) // logs the reasonCode
+            if (!noError) logger.debug("NOT HANDLED. Sending Result failed!")
+        } else {
+            logger.error("Expected PUBACK for the RESULT, but received: {}", pubAck)
         }
     }
-    // publishes an Acknowledgement for receiving a client's request. the client listens to it
+    // publishes an Acknowledgement for receiving a client's request. the client listening for it
     fun sendAck(funcName: String, clientFence: Geofence) {
         val responseTopicFence = ListeningTopicPatched(null, brokerFence.toJson())
         val message = FunctionMessage(funcName, FunctionAction.ACK, "", TypeCode.NORMAL, responseTopicFence)
         remoteGeoBroker.send(Payload.PUBLISHPayload(Topic("functions/$funcName/ack"), clientFence, gson.toJson(message)))
-        val msg = remoteGeoBroker.receive()
-        logger.info("Received geoBroker's answer for publishing ack ACK: {}", msg)
-        // TODO: check if reasonCode is okay (similar to sendResult). log error if not. reasonCode=NoMatchingSubscribers
+        val pubAck = remoteGeoBroker.receive()
+        val logMsg = "GeoBroker's 'Publish ACK' for the '$funcName' ACK by $id: {}"
+        if (pubAck is Payload.PUBACKPayload) {
+            val noError = logPublishAck(pubAck, logMsg) // logs the reasonCode
+            if (!noError) logger.debug("NOT HANDLED. Sending Ack failed!")
+        } else {
+            logger.error("Expected PUBACK for the Ack, but received: {}", pubAck)
+        }
     }
 
-    // publishes a NotAck to offload to the cloud
+    // publishes a NotAck to offload to the cloud. the cloud listening for it
     fun sendNack(funcName: String, data: String, clientFence: Geofence, cloudFence: Geofence) {
         val responseTopicFence = ListeningTopicPatched(Topic("functions/$funcName/result"), clientFence.toJson())
         val message = FunctionMessage(funcName, FunctionAction.NACK, data, TypeCode.PIGGY, responseTopicFence)
         remoteGeoBroker.send(Payload.PUBLISHPayload(Topic("functions/$funcName/nack"), cloudFence, gson.toJson(message)))
-        val msg = remoteGeoBroker.receive()
-        logger.info("Received geoBroker's answer for publishing NACK: {}", msg)
-        // TODO: check if reasonCode is okay. log error if not.
+        val pubAck = remoteGeoBroker.receive()
+        val logMsg = "GeoBroker's 'Publish ACK' for the '$funcName' NACK by $id: {}"
+        if (pubAck is Payload.PUBACKPayload) {
+            val noError = logPublishAck(pubAck, logMsg) // logs the reasonCode
+            if (!noError) logger.debug("NOT HANDLED. Sending NACK failed!")
+        } else {
+            logger.error("Expected PUBACK for the Nack, but received: {}", pubAck)
+        }
     }
 }

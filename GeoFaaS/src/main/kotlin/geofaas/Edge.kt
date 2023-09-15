@@ -63,12 +63,12 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
                 if (newMsg.funcName in registeredFunctionsName){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
                     val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName)
                     val response = selectedFaaS.call(newMsg.funcName, newMsg.data)
-                    logger.debug("FaaS Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
+                    logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
 
                     if (response != null) {
-                        val responseBody: String = response.body()
+                        val responseBody: String = response.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
                         gbClient.sendResult(newMsg.funcName, responseBody, clientFence)
-                        logger.info("sent the result '{}' to functions/${newMsg.funcName}/result topic", responseBody) // wiki: Found 1229 primes under 10000
+                        logger.info("${gbClient.id}: sent the result '{}' to functions/${newMsg.funcName}/result", responseBody) // wiki: Found 1229 primes under 10000
                     } else { // connection refused?
                         logger.error("No response from the FaaS with '${selectedFaaS.host}' address for the function call '${newMsg.funcName}'")
                         gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence, cloudFence)
@@ -99,8 +99,8 @@ suspend fun main() {
     val tf = TinyFaasClient("localhost", 8000)
 //    val tf = TinyFaasClient("192.168.100.144", 8000) // home raspberry
 
-    // NOTE: Geofence is 'world'
-    val registerSuccess = gf.registerFaaS(tf, Geofence.world()) //Geofence.circle(frankfurtLoc, 500.0))
+    // NOTE: check if Geofence is 'world'
+    val registerSuccess = gf.registerFaaS(tf, Geofence.circle(frankfurtLoc, 10.1))
     if (registerSuccess) {
         repeat(1){
             gf.handleNextRequest() //TODO: call in a coroutine? or  a separate thread

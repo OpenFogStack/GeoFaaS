@@ -24,21 +24,10 @@ class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", 
             val message = gson.toJson(FunctionMessage(funcName, FunctionAction.CALL, data, TypeCode.NORMAL, responseTopicFence))
             remoteGeoBroker.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call"), pubFence, message))
             val pubAck = remoteGeoBroker.receive()
-            val logMsg = "GeoBroker's 'Publish ACK' for the '$funcName' CALL by ${mode.name}: {}"
+            val logMsg = "GeoBroker's 'Publish ACK' for the '$funcName' CALL by $id: {}"
             if (pubAck is Payload.PUBACKPayload) {
-                when (pubAck.reasonCode) {
-                    ReasonCode.GrantedQoS0 -> logger.info(logMsg, pubAck)
-                    ReasonCode.NoMatchingSubscribersButForwarded -> logger.warn(logMsg, pubAck.reasonCode)
-                    ReasonCode.NoMatchingSubscribers -> {
-                        logger.error("$logMsg. Terminating...", pubAck.reasonCode)
-                        return null
-                    }
-                    ReasonCode.NotConnectedOrNoLocation -> {
-                        logger.error(logMsg, pubAck)
-                        return null
-                    }
-                    else -> logger.warn(logMsg, pubAck)
-                }
+                val noError = logPublishAck(pubAck, logMsg) // logs the reasonCode
+                if (!noError) return null
             } else { logger.error("Unexpected! $logMsg", pubAck); return null }
 
             // Wait for GeoFaaS's response

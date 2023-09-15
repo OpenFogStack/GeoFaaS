@@ -20,7 +20,7 @@ import java.lang.Exception
 val logger = LogManager.getLogger()
 
 // Basic Geobroker client for GeoFaaS system
-abstract class GeoBrokerClient(val location: Location, val mode: ClientType, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSAbstract") {
+abstract class GeoBrokerClient(val location: Location, val mode: ClientType, debug: Boolean, host: String = "localhost", port: Int = 5559, val id: String = "GeoFaaSAbstract") {
 
     private var listeningTopics = mutableSetOf<ListeningTopic>()
     private val processManager = ZMQProcessManager()
@@ -38,7 +38,7 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
     }
 
     fun subscribeFunction(funcName: String, fence: Geofence): MutableSet<ListeningTopic>? {
-        logger.debug("subscribeFunction() call params:'{}', '{}'", funcName, fence)
+        logger.debug("subscribeFunction() call. params:'{}', '{}'", funcName, fence)
         var newTopics: MutableSet<ListeningTopic> = mutableSetOf()
         var baseTopic = "functions/$funcName"
         baseTopic += when (mode) {
@@ -85,7 +85,7 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
         // function call
         logger.info("Listening to the geoBroker server...")
         val msg = remoteGeoBroker.receive() // blocking
-        logger.info("new geoBroker msg: {}", msg)
+        logger.info("EVENT from geoBroker: {}", msg)
         if (msg is Payload.PUBLISHPayload) {
 // wiki:    msg.topic    => Topic(topic=functions/f1/call)
 // wiki:    msg.content  => message
@@ -107,8 +107,8 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
 
     // returns a list of function names, either listening to call, results, or ack/nack (since a client is either pub or sub of a topic not both)
     fun subscribedFunctionsList(): List<String> {
-        val functionCalls =  listeningTopics.map { pair -> pair.topic.topic }//.filter { it.endsWith("/call") }
-        logger.debug("functions already listening: {}", functionCalls)
+        val functionCalls = listeningTopics.map { pair -> pair.topic.topic }//.filter { it.endsWith("/call") }
+        logger.debug("functions that $id already listening to: {}", functionCalls)
         return functionCalls.map { it.substringAfter("/").substringBefore('/') }.distinct() // name of function is between '/', e.g. "functions/f1/call"
     }
 
@@ -128,4 +128,22 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
      private fun isSubscribedTo(topic: String): Boolean { // NOTE: checks only the topic, not the fence
         return listeningTopics.map { pair -> pair.topic.topic }.any { it == topic }
      }
+    protected fun logPublishAck(pubAck: Payload.PUBACKPayload, logMsg: String): Boolean {
+        // logMsg: "GeoBroker's 'Publish ACK' for the '$funcName' ACK by $id: {}"
+        when (pubAck.reasonCode) {
+            ReasonCode.GrantedQoS0 -> logger.info(logMsg, pubAck)
+            ReasonCode.Success -> logger.info(logMsg, pubAck)
+            ReasonCode.NoMatchingSubscribersButForwarded -> logger.warn(logMsg, pubAck.reasonCode)
+            ReasonCode.NoMatchingSubscribers -> {
+                logger.error("$logMsg. Terminating...", pubAck.reasonCode)
+                return false
+            }
+            ReasonCode.NotConnectedOrNoLocation -> {
+                logger.error(logMsg, pubAck)
+                return false
+            }
+            else -> logger.warn(logMsg, pubAck)
+        }
+        return true
+    }
 }
