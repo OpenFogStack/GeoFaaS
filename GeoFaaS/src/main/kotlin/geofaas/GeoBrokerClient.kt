@@ -24,15 +24,22 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
 
     private var listeningTopics = mutableSetOf<ListeningTopic>()
     private val processManager = ZMQProcessManager()
-    val remoteGeoBroker = SimpleClient(host, port, identity = id)
+    var remoteGeoBroker = SimpleClient(host, port, identity = id)
     val gson = Gson()
     init {
         if (debug) { setLogLevel(logger, Level.DEBUG) }
         remoteGeoBroker.send(Payload.CONNECTPayload(location)) // connect
-        val connAck = remoteGeoBroker.receive()
+        var connAck = remoteGeoBroker.receive()
         if (connAck is Payload.DISCONNECTPayload) {
-            logger.fatal("${connAck.reasonCode}! $id can't connect to the remote geoBroker '$host:$port'!")
-            throw RuntimeException("Error while connecting to the geoBroker")
+            if(connAck.brokerInfo == null) { // retry with suggested broker
+                logger.fatal("${connAck.reasonCode}! $id can't connect to the remote geoBroker '$host:$port'! Responsible broker: ${connAck.brokerInfo}")
+                throw RuntimeException("Error while connecting to the geoBroker")
+            } else {
+                logger.warn("Changed the remote broker to the suggested: ${connAck.brokerInfo}")
+                remoteGeoBroker = SimpleClient(connAck.brokerInfo!!.ip, connAck.brokerInfo!!.port, identity = id)
+                remoteGeoBroker.send(Payload.CONNECTPayload(location)) // connect
+                connAck = remoteGeoBroker.receive()
+            }
         }
         logger.info("Received geoBroker's answer (Conn ACK): {}", connAck)
     }

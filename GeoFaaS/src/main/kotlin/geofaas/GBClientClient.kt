@@ -1,7 +1,6 @@
 package geofaas
 
 import de.hasenburg.geobroker.commons.model.message.Payload
-import de.hasenburg.geobroker.commons.model.message.ReasonCode
 import de.hasenburg.geobroker.commons.model.message.Topic
 import de.hasenburg.geobroker.commons.model.spatial.Geofence
 import de.hasenburg.geobroker.commons.model.spatial.Location
@@ -50,7 +49,7 @@ class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", 
                 return res?.data
             } else { logger.error("null response received from GeoBroker! (Client.Listen())") }
             return null
-            // Unsubscribe
+            // Unsubscribe after receiving the response
             //TODO: Unsubscribe
         }
         logger.error("Call function failed! Failed to subscribe to /result and /ack")
@@ -59,10 +58,11 @@ class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", 
 }
 
 fun main() {
-    val parisLoc = Location(48.877366, 2.359708)
-//    val frankfurtLocOnly = Location(50.106732,8.663124); val parisLoc = frankfurtLocOnly
-    val client1 = GBClientClient(parisLoc, true, "localhost", 5560)
-    val res: String? = client1.callFunction("sieve", "", pubFence = Geofence.circle(parisLoc, 2.1), subFence = Geofence.circle(parisLoc, 2.1))
+    val parisClientLoc = Location(48.835797,2.244301) // Boulogne Bilancourt area in Paris
+    val parisEdgeLoc = Location(48.877366, 2.359708)
+//    val frankfurtEdgeLoc = Location(50.106732,8.663124); val parisLoc = frankfurtLocOnly
+    val client1 = GBClientClient(parisClientLoc, true, "141.23.28.205", 5559)
+    val res: String? = client1.callFunction("sieve", "", pubFence = Geofence.circle(parisClientLoc, 2.1), subFence = Geofence.circle(parisClientLoc, 2.1))
     if(res != null) println("Result: $res")
     sleepNoLog(2000, 0)
     client1.terminate()

@@ -56,7 +56,7 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
     suspend fun handleNextRequest() {
         val newMsg :Model.FunctionMessage? = gbClient.listen() // blocking
         if (newMsg != null) {
-            val clientFence = newMsg.responseTopicFence.fence.toGeofence()
+            val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
             if (newMsg.funcAction == FunctionAction.CALL) {
                 gbClient.sendAck(newMsg.funcName, clientFence) // tell the client you received its request
                 val registeredFunctionsName: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
@@ -94,13 +94,14 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
 }
 
 suspend fun main() {
-    val frankfurtLoc = Location(50.106732,8.663124) // same as frankfurt (broker are: radius: 2.1)
+    val frankfurtLoc = Location(50.106732,8.663124) // same as frankfurt (broker area: radius: 2.1)
+    val brokerArea = Geofence.world()//Geofence.circle(frankfurtLoc, 2.1) // TODO: same as broker area
     val gf = Edge(frankfurtLoc, true, "localhost", 5559)
     val tf = TinyFaasClient("localhost", 8000)
 //    val tf = TinyFaasClient("192.168.100.144", 8000) // home raspberry
 
     // NOTE: check if Geofence is 'world'
-    val registerSuccess = gf.registerFaaS(tf, Geofence.circle(frankfurtLoc, 10.1))
+    val registerSuccess = gf.registerFaaS(tf, brokerArea)
     if (registerSuccess) {
         repeat(1){
             gf.handleNextRequest() //TODO: call in a coroutine? or  a separate thread
