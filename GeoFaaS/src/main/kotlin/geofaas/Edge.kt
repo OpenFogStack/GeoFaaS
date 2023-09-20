@@ -3,6 +3,8 @@ package geofaas
 import de.hasenburg.geobroker.commons.model.spatial.Geofence
 import de.hasenburg.geobroker.commons.model.spatial.Location
 import de.hasenburg.geobroker.commons.model.spatial.toGeofence
+import de.hasenburg.geobroker.commons.model.disgb.BrokerArea
+//import de.hasenburg.geobroker.server.distribution.BrokerAreaManager
 import io.ktor.client.call.*
 import org.apache.logging.log4j.LogManager
 import geofaas.Model.FunctionAction
@@ -93,18 +95,22 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
     }
 }
 
-suspend fun main() {
-    val frankfurtLoc = Location(50.106732,8.663124) // same as frankfurt (broker area: radius: 2.1)
-    val brokerArea = Geofence.world()//Geofence.circle(frankfurtLoc, 2.1) // TODO: same as broker area
-    val gf = Edge(frankfurtLoc, true, "localhost", 5559)
+suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-registry.json)
+    println(args[0])
+    val disgbRegistry = BrokerAreaManager(args[0]) // broker id
+    disgbRegistry.readFromFile("geobroker/config/disgb-registry.json") // initialize
+    val brokerInfo = disgbRegistry.ownBrokerInfo
+    val brokerArea: Geofence = disgbRegistry.ownBrokerArea.coveredArea
+//    val frankfurtLoc = Location(50.106732,8.663124) // same as frankfurt (broker area: radius: 2.1)
+//    val parisEdgeLoc = Location(48.877366, 2.359708)
+//    val brokerArea = Geofence.circle(parisEdgeLoc, 2.1)
+    val gf = Edge(brokerArea.center, true, brokerInfo.ip, brokerInfo.port)
     val tf = TinyFaasClient("localhost", 8000)
-//    val tf = TinyFaasClient("192.168.100.144", 8000) // home raspberry
 
-    // NOTE: check if Geofence is 'world'
     val registerSuccess = gf.registerFaaS(tf, brokerArea)
     if (registerSuccess) {
-        repeat(1){
-            gf.handleNextRequest() //TODO: call in a coroutine? or  a separate thread
+        repeat(args[1].toInt()){
+            gf.handleNextRequest() //TODO: call in a coroutine? or a separate thread
         }
     }
     gf.terminate()
