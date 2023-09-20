@@ -25,6 +25,7 @@ class TinyFaasClient (val host: String, val port: Int, private var functionsLoca
     suspend fun call(funcName: String, data: String): HttpResponse? {
         try {
             val resp = client.get("http://$host:$port/$funcName") //TODO: add data in the call
+            //Fixme handle HttpResponse[http://localhost:8000/sieve, 500 Internal Server Error]
             return resp
         } catch (e: Throwable) {
             // TODO: print the error somewhere in log or in returning§

@@ -17,11 +17,9 @@ import org.apache.logging.log4j.Level
 import org.apache.logging.log4j.LogManager
 import java.lang.Exception
 
-val logger = LogManager.getLogger()
-
 // Basic Geobroker client for GeoFaaS system
 abstract class GeoBrokerClient(val location: Location, val mode: ClientType, debug: Boolean, host: String = "localhost", port: Int = 5559, val id: String = "GeoFaaSAbstract") {
-
+    val logger = LogManager.getLogger()
     private var listeningTopics = mutableSetOf<ListeningTopic>()
     private val processManager = ZMQProcessManager()
     var remoteGeoBroker = SimpleClient(host, port, identity = id)
