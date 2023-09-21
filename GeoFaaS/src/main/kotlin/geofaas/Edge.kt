@@ -3,18 +3,17 @@ package geofaas
 import de.hasenburg.geobroker.commons.model.spatial.Geofence
 import de.hasenburg.geobroker.commons.model.spatial.Location
 import de.hasenburg.geobroker.commons.model.spatial.toGeofence
-import de.hasenburg.geobroker.commons.model.disgb.BrokerArea
 //import de.hasenburg.geobroker.server.distribution.BrokerAreaManager
 import io.ktor.client.call.*
 import org.apache.logging.log4j.LogManager
 import geofaas.Model.FunctionAction
 import geofaas.Model.GeoFaaSFunction
 import geofaas.Model.ListeningTopic
+import geofaas.Model.ClientType
 
-val cloudFence = Geofence.world()
 class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSEdge1", brokerAreaManager: BrokerAreaManager) {
     private val logger = LogManager.getLogger()
-    private val gbClient = GBClientEdge(loc, debug, host, port, id, brokerAreaManager)
+    private val gbClient = GBClientServer(loc, debug, host, port, id, ClientType.EDGE, brokerAreaManager)
     private var faasRegistry = mutableListOf<TinyFaasClient>()
     // returns ture if success to Subscribe to all the functions
     fun registerFunctions(functions: Set<GeoFaaSFunction>, fence: Geofence): Boolean { //FIXME: should update CALL subscriptions in geoBroker when remote FaaS added/removed serving function
@@ -73,11 +72,11 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
                         logger.info("${gbClient.id}: sent the result '{}' to functions/${newMsg.funcName}/result", responseBody) // wiki: Found 1229 primes under 10000
                     } else { // connection refused?
                         logger.error("No response from the FaaS with '${selectedFaaS.host}' address for the function call '${newMsg.funcName}'")
-                        gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence, cloudFence)
+                        gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence)
                     }
                 } else {
                     logger.fatal("No FaaS is serving the '${newMsg.funcName}' function!")
-                    gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence, cloudFence)
+                    gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence)
                 }
             } else {
                 logger.error("The new request is not a CALL, but a ${newMsg.funcAction}!")
@@ -98,12 +97,15 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
 suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-registry.json)
     println(args[0])
     val disgbRegistry = BrokerAreaManager(args[0]) // broker id
-    //disgbRegistry.readFromFile("geobroker/config/disgb-registry.json") // initialize
-//    disgbRegistry.readFromFile("GeoBroker-Server/src/main/resources/jfsb/disgb_jfsb.json") // from intellij
-    disgbRegistry.readFromFile("../../GeoBroker-Server/src/main/resources/jfsb/disgb_jfsb.json") // from local jar
+    when (args[2]) { // initialize
+        "production" -> disgbRegistry.readFromFile("geobroker/config/disgb-registry.json")
+        "intellij"   -> disgbRegistry.readFromFile("GeoBroker-Server/src/main/resources/jfsb/disgb_jfsb.json")
+        "localjar"   -> disgbRegistry.readFromFile("../../GeoBroker-Server/src/main/resources/jfsb/disgb_jfsb.json")
+        else -> throw RuntimeException("Wrong running mode. please specify any of 'production', 'localjar', or 'intellij'")
+    }
     val brokerInfo = disgbRegistry.ownBrokerInfo
     val brokerArea: Geofence = disgbRegistry.ownBrokerArea.coveredArea // broker area: radius: 2.1
-    val gf = Edge(brokerArea.center, true, brokerInfo.ip, brokerInfo.port, brokerAreaManager =  disgbRegistry)
+    val gf = Edge(brokerArea.center, true, brokerInfo.ip, brokerInfo.port, "GeoFaaSEdge-${brokerInfo.brokerId}", brokerAreaManager =  disgbRegistry)
     val tf = TinyFaasClient("localhost", 8000)
 
     val registerSuccess = gf.registerFaaS(tf)
