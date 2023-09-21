@@ -11,7 +11,7 @@ import geofaas.Model.FunctionAction
 import geofaas.Model.TypeCode
 import geofaas.Model.ListeningTopicPatched
 
-class GBClientEdge(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSEdgeTest") :GeoBrokerClient(loc, Model.ClientType.EDGE, debug, host, port, id) {
+class GBClientEdge(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSEdgeTest", val brokerAreaManager: BrokerAreaManager) :GeoBrokerClient(loc, Model.ClientType.EDGE, debug, host, port, id) {
     // publishes result for a function request
     private val brokerFence = Geofence.circle(location, 2.1)
     fun sendResult(funcName: String, res: String, clientFence: Geofence) {

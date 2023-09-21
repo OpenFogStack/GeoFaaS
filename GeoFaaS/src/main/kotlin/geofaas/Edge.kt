@@ -12,9 +12,9 @@ import geofaas.Model.GeoFaaSFunction
 import geofaas.Model.ListeningTopic
 
 val cloudFence = Geofence.world()
-class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSEdge1") {
+class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSEdge1", brokerAreaManager: BrokerAreaManager) {
     private val logger = LogManager.getLogger()
-    private val gbClient = GBClientEdge(loc, debug, host, port, id)
+    private val gbClient = GBClientEdge(loc, debug, host, port, id, brokerAreaManager)
     private var faasRegistry = mutableListOf<TinyFaasClient>()
     // returns ture if success to Subscribe to all the functions
     fun registerFunctions(functions: Set<GeoFaaSFunction>, fence: Geofence): Boolean { //FIXME: should update CALL subscriptions in geoBroker when remote FaaS added/removed serving function
@@ -35,10 +35,10 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
         return true
     }
 
-    suspend fun registerFaaS(tf: TinyFaasClient, fence: Geofence): Boolean {
+    suspend fun registerFaaS(tf: TinyFaasClient): Boolean {
         val funcs: Set<GeoFaaSFunction> = tf.functions()
         if (funcs.isNotEmpty()) {
-            val registerSuccess = registerFunctions(funcs, fence)
+            val registerSuccess = registerFunctions(funcs, gbClient.brokerAreaManager.ownBrokerArea.coveredArea)
             return if (registerSuccess) {
                 logger.info("new FaaS's functions have been registered")
                 faasRegistry += tf
@@ -101,16 +101,12 @@ suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-r
     //disgbRegistry.readFromFile("geobroker/config/disgb-registry.json") // initialize
 //    disgbRegistry.readFromFile("GeoBroker-Server/src/main/resources/jfsb/disgb_jfsb.json") // from intellij
     disgbRegistry.readFromFile("../../GeoBroker-Server/src/main/resources/jfsb/disgb_jfsb.json") // from local jar
-
     val brokerInfo = disgbRegistry.ownBrokerInfo
-    val brokerArea: Geofence = disgbRegistry.ownBrokerArea.coveredArea
-//    val frankfurtLoc = Location(50.106732,8.663124) // same as frankfurt (broker area: radius: 2.1)
-//    val parisEdgeLoc = Location(48.877366, 2.359708)
-//    val brokerArea = Geofence.circle(parisEdgeLoc, 2.1)
-    val gf = Edge(brokerArea.center, true, brokerInfo.ip, brokerInfo.port)
+    val brokerArea: Geofence = disgbRegistry.ownBrokerArea.coveredArea // broker area: radius: 2.1
+    val gf = Edge(brokerArea.center, true, brokerInfo.ip, brokerInfo.port, brokerAreaManager =  disgbRegistry)
     val tf = TinyFaasClient("localhost", 8000)
 
-    val registerSuccess = gf.registerFaaS(tf, brokerArea)
+    val registerSuccess = gf.registerFaaS(tf)
     if (registerSuccess) {
         repeat(args[1].toInt()){
             gf.handleNextRequest() //TODO: call in a coroutine? or a separate thread
