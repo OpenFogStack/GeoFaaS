@@ -30,7 +30,7 @@ hx ~/.profile # for helix edior, alternatively vim or nano, etc.
 - [official recipe for raspberry pi](https://docs.docker.com/engine/install/raspberry-pi-os/#install-using-the-repository)
 - [same for debian](https://docs.docker.com/engine/install/debian/)
 - in the mentioned doc, you can install both latest or specific version of docker
-- I needed to add current user to the docker group and logout/login. `sudo usermod -aG docker ${USER}`
+- I needed to add current user to the docker group and logout/login. `sudo usermod -aG docker ${USER}`. Check [post install steps](https://docs.docker.com/engine/install/linux-postinstall/)
 
 ### Setup codes (To be updated)
 ```

@@ -30,7 +30,7 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
         var connAck = remoteGeoBroker.receive()
         if (connAck is Payload.DISCONNECTPayload) {
             if(connAck.brokerInfo == null) { // retry with suggested broker
-                logger.fatal("${connAck.reasonCode}! $id can't connect to the remote geoBroker '$host:$port'! Responsible broker: ${connAck.brokerInfo}")
+                logger.fatal("No responsible broker found. $id can't connect to the remote geoBroker '$host:$port', ${connAck.reasonCode}!!")
                 throw RuntimeException("Error while connecting to the geoBroker")
             } else {
                 logger.warn("Changed the remote broker to the suggested: ${connAck.brokerInfo}")
@@ -39,7 +39,12 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
                 connAck = remoteGeoBroker.receive()
             }
         }
-        logger.info("Received geoBroker's answer (Conn ACK): {}", connAck)
+        if (connAck is Payload.DISCONNECTPayload) {
+            logger.fatal("${connAck.reasonCode}! Failed to connect to suggested server $host:$port'! another suggested server? ${connAck.brokerInfo}")
+            throw RuntimeException("Error while connecting to the new geoBroker")
+        } else {
+            logger.info("Received geoBroker's answer (Conn ACK): {}", connAck)
+        }
     }
 
     fun subscribeFunction(funcName: String, fence: Geofence): MutableSet<ListeningTopic>? {
