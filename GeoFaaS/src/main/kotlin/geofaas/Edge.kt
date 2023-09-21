@@ -98,7 +98,10 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
 suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-registry.json)
     println(args[0])
     val disgbRegistry = BrokerAreaManager(args[0]) // broker id
-    disgbRegistry.readFromFile("geobroker/config/disgb-registry.json") // initialize
+    //disgbRegistry.readFromFile("geobroker/config/disgb-registry.json") // initialize
+//    disgbRegistry.readFromFile("GeoBroker-Server/src/main/resources/jfsb/disgb_jfsb.json") // from intellij
+    disgbRegistry.readFromFile("../../GeoBroker-Server/src/main/resources/jfsb/disgb_jfsb.json") // from local jar
+
     val brokerInfo = disgbRegistry.ownBrokerInfo
     val brokerArea: Geofence = disgbRegistry.ownBrokerArea.coveredArea
 //    val frankfurtLoc = Location(50.106732,8.663124) // same as frankfurt (broker area: radius: 2.1)

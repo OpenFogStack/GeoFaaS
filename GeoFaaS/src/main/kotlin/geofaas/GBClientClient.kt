@@ -58,11 +58,15 @@ class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", 
 }
 
 fun main() {
-    val parisClientLoc = Location(48.835797,2.244301) // Boulogne Bilancourt area in Paris
-    val parisEdgeLoc = Location(48.877366, 2.359708)
+//    val closerToParisClientLoc = Location(50.289339,3.801270)
+//    val belgiumClientLoc = Location(50.597186,4.822998)
+//    val farClientLocNonOverlap = Location(47.323931,5.174561)
+    val parisClientLocNonOverlap = Location(48.719961,1.153564)
+//    val parisClientLoc = Location(48.858391, 2.327385)// overlaps with broker area but the broker is not inside the fence//Location(48.835797,2.244301) // Boulogne Bilancourt area in Paris
+//    val parisEdgeLoc = Location(48.877366, 2.359708)
 //    val frankfurtEdgeLoc = Location(50.106732,8.663124); val parisLoc = frankfurtLocOnly
-    val client1 = GBClientClient(parisClientLoc, true, "141.23.28.205", 5559)
-    val res: String? = client1.callFunction("sieve", "", pubFence = Geofence.circle(parisClientLoc, 2.1), subFence = Geofence.circle(parisClientLoc, 2.1))
+    val client1 = GBClientClient(parisClientLocNonOverlap, true, "141.23.28.207", 5560)
+    val res: String? = client1.callFunction("sieve", "", pubFence = Geofence.circle(parisClientLocNonOverlap, 2.1), subFence = Geofence.circle(parisClientLocNonOverlap, 2.1))
     if(res != null) println("Result: $res")
     sleepNoLog(2000, 0)
     client1.terminate()
