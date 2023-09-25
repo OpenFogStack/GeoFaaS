@@ -144,13 +144,14 @@ fun publishMessageToLocalClients(publisherLocation: Location, publishPayload: Pa
     // get subscriptions that have a geofence containing the publisher location
     val subscriptionIdResults =
             topicAndGeofenceMapper.getSubscriptionIds(publishPayload.topic, publisherLocation, clientDirectory)
-
+    logger.debug(">>>subIDs matching with publisher location: {}", subscriptionIdResults) //\\
 
     // only keep subscription if subscriber location is insider message geofence
     val subscriptionIds = subscriptionIdResults.filter { subId ->
-        subId.left.startsWith("GeoFaaS") || // if it is geoFaaS Server, skip it
+        subId.left.startsWith("GeoFaaS-") || // if it is a geoFaaS Server, keep it
         publishPayload.geofence.contains(clientDirectory.getClientLocation(subId.left))
     }
+    logger.debug(">>>subIDs filtered: {}", subscriptionIds) //\\
 
     // publish message to remaining subscribers
     for (subscriptionId in subscriptionIds) {

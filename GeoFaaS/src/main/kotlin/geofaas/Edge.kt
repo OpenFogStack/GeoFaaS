@@ -10,8 +10,9 @@ import geofaas.Model.FunctionAction
 import geofaas.Model.GeoFaaSFunction
 import geofaas.Model.ListeningTopic
 import geofaas.Model.ClientType
+import geofaas.Model.FunctionMessage
 
-class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSEdge1", brokerAreaManager: BrokerAreaManager) {
+class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaS-Edge1", brokerAreaManager: BrokerAreaManager) {
     private val logger = LogManager.getLogger()
     private val gbClient = GBClientServer(loc, debug, host, port, id, ClientType.EDGE, brokerAreaManager)
     private var faasRegistry = mutableListOf<TinyFaasClient>()
@@ -55,7 +56,7 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
     }
 
     suspend fun handleNextRequest() {
-        val newMsg :Model.FunctionMessage? = gbClient.listen() // blocking
+        val newMsg :FunctionMessage? = gbClient.listen() // blocking
         if (newMsg != null) {
             val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
             if (newMsg.funcAction == FunctionAction.CALL) {
@@ -105,7 +106,8 @@ suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-r
     }
     val brokerInfo = disgbRegistry.ownBrokerInfo
     val brokerArea: Geofence = disgbRegistry.ownBrokerArea.coveredArea // broker area: radius: 2.1
-    val gf = Edge(brokerArea.center, true, brokerInfo.ip, brokerInfo.port, "GeoFaaSEdge-${brokerInfo.brokerId}", brokerAreaManager =  disgbRegistry)
+    println(brokerArea.center)
+    val gf = Edge(brokerArea.center, true, brokerInfo.ip, brokerInfo.port, "GeoFaaS-${brokerInfo.brokerId}", brokerAreaManager =  disgbRegistry)
     val tf = TinyFaasClient("localhost", 8000)
 
     val registerSuccess = gf.registerFaaS(tf)

@@ -13,7 +13,7 @@ import geofaas.Model.TypeCode
 import geofaas.Model.ListeningTopic
 import geofaas.Model.ListeningTopicPatched
 
-class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSClient1"): GeoBrokerClient(loc, ClientType.CLIENT, debug, host, port, id) {
+class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "ClientGeoFaaS1"): GeoBrokerClient(loc, ClientType.CLIENT, debug, host, port, id) {
     fun callFunction(funcName: String, data: String, radiusDegree: Double): String? {
         val pubFence = Geofence.circle(location, radiusDegree)
         val subFence = Geofence.circle(location, radiusDegree)
@@ -67,9 +67,10 @@ fun main() {
         "parisOverlap" to Location(48.858391, 2.327385), // overlaps with broker area but the broker is not inside the fence
         "paris2" to Location(48.835797,2.244301), // Boulogne Bilancourt area in Paris
         "parisEdge" to Location(48.877366, 2.359708),
-        "frankfurtEdge" to Location(50.106732,8.663124))
+        "frankfurtEdge" to Location(50.106732,8.663124),
+        "amsterdamEdge" to Location(52.315195,4.894409))
 
-    val client1 = GBClientClient(clientLoc["parisNonOverlap"]!!, true, "141.23.28.207", 5560)
+    val client1 = GBClientClient(clientLoc["frankfurtEdge"]!!, true, "141.23.28.207", 5560)
     val res: String? = client1.callFunction("sieve", "", 2.1)
     if(res != null) println("Result: $res")
     sleepNoLog(2000, 0)
