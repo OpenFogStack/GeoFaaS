@@ -62,6 +62,11 @@ messageProcessors = 2
     brokerAreaFilePath = "config/disgb-registry.json"
     brokerCommunicators = 2
 ```
+- The geoBroker's client names matter, as it will skip event geo-check for "GeoFaaS-" servers, and skip subscription checking 
+- 'granularity' is the accuracy for location queries. the bigger, the smaller tiles of world map, therefore more accuracy.
+- 'messageProcessors' is the number of ZMQ message processors (check DisGBSubscriberMatchingServerLogic.java)
+- 'brokerCommunicators' is the number of ZMQ message communicators; is also a parameter used in each message processor and broker communicator (ZMQProcessStarter.java)
+- 
 
 ## **Running**
 - Run geoBroker servers in Distributed mode (frankfurt & paris sample):
