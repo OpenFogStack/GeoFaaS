@@ -40,7 +40,7 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
             }
         }
         if (connAck is Payload.DISCONNECTPayload) {
-            logger.fatal("${connAck.reasonCode}! Failed to connect to suggested server $host:$port'! another suggested server? ${connAck.brokerInfo}")
+            logger.fatal("${connAck.reasonCode}! Failed to connect to suggested server! another suggested server? ${connAck.brokerInfo}")
             throw RuntimeException("Error while connecting to the new geoBroker")
         } else {
             logger.info("Received geoBroker's answer (Conn ACK): {}", connAck)
