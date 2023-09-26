@@ -15,7 +15,6 @@ import geofaas.Model.ListeningTopic
 import geofaas.Model.ClientType
 import org.apache.logging.log4j.Level
 import org.apache.logging.log4j.LogManager
-import java.lang.Exception
 
 // Basic Geobroker client for GeoFaaS system
 abstract class GeoBrokerClient(val location: Location, val mode: ClientType, debug: Boolean, host: String = "localhost", port: Int = 5559, val id: String = "GeoFaaSAbstract") {
@@ -91,9 +90,9 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
         return null
     }
 
-    fun listen(): FunctionMessage? {
+    fun listen(type: FunctionAction): FunctionMessage? {
         // function call
-        logger.info("Listening to the geoBroker server...")
+        logger.info("Listening to the geoBroker server for a '$type'...")
         val msg = remoteGeoBroker.receive() // blocking
         logger.info("EVENT from geoBroker: {}", msg)
         if (msg is Payload.PUBLISHPayload) {

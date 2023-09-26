@@ -32,15 +32,14 @@ class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", 
             } else { logger.error("Unexpected! $logMsg", pubAck); return null }
 
             // Wait for GeoFaaS's response
-            logger.info("Listening for an ack from the server...")
-            val ack: FunctionMessage? = listen()
+            val ack: FunctionMessage? = listen(FunctionAction.ACK)
             var res: FunctionMessage? = null
             if (ack != null) {
                 if (ack.funcAction == FunctionAction.ACK) {
                     logger.info("new Ack received")
                     when (ack.typeCode) {
                         TypeCode.NORMAL -> {
-                            res = listen()
+                            res = listen(FunctionAction.RESULT)
                         }
                         TypeCode.PIGGY -> {
                             return null //TODO: Implement if Ack is piggybacked
@@ -61,16 +60,18 @@ class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", 
 
 fun main() {
     val clientLoc = mapOf("middleButCloserToParis" to Location(50.289339,3.801270),
-        "belgium" to Location(50.597186,4.822998),
-        "farSouth" to Location(47.323931,5.174561),
         "parisNonOverlap" to Location(48.719961,1.153564),
         "parisOverlap" to Location(48.858391, 2.327385), // overlaps with broker area but the broker is not inside the fence
         "paris2" to Location(48.835797,2.244301), // Boulogne Bilancourt area in Paris
         "parisEdge" to Location(48.877366, 2.359708),
         "frankfurtEdge" to Location(50.106732,8.663124),
-        "amsterdamEdge" to Location(52.315195,4.894409))
+        "potsdam" to Location(52.400953,13.060169),
+        "franceEast" to Location(47.323931,5.174561),
+        "amsterdam" to Location(52.315195,4.894409),
+        "hamburg" to Location(53.527248,9.986572),
+        "belgium" to Location(50.597186,4.822998))
 
-    val client1 = GBClientClient(clientLoc["frankfurtEdge"]!!, true, "141.23.28.207", 5560)
+    val client1 = GBClientClient(clientLoc["potsdam"]!!, true, "141.23.28.207", 5560)
     val res: String? = client1.callFunction("sieve", "", 2.1)
     if(res != null) println("Result: $res")
     sleepNoLog(2000, 0)
