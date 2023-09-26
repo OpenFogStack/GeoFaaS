@@ -9,8 +9,11 @@ import geofaas.Model.FunctionMessage
 import geofaas.Model.FunctionAction
 import geofaas.Model.TypeCode
 import geofaas.Model.ListeningTopicPatched
+import geofaas.Model.GeoFaaSFunction
+import geofaas.Model.ListeningTopic
+import geofaas.Model.ClientType
 
-class GBClientServer(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSServerTest", mode: Model.ClientType, val brokerAreaManager: BrokerAreaManager) :GeoBrokerClient(loc, mode, debug, host, port, id) {
+class GBClientServer(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSServerTest", mode: ClientType, val brokerAreaManager: BrokerAreaManager) :GeoBrokerClient(loc, mode, debug, host, port, id) {
     private val brokerArea: Geofence = brokerAreaManager.ownBrokerArea.coveredArea //Note: parsing geoFaaS's brokerAreaManager Geofence to geobroker Geofence
     // publishes result for a function request
     fun sendResult(funcName: String, res: String, clientFence: Geofence) {
@@ -54,6 +57,35 @@ class GBClientServer(loc: Location, debug: Boolean, host: String = "localhost", 
             if (!noError) logger.debug("NOT HANDLED. Sending NACK failed!")
         } else {
             logger.error("Expected PUBACK for the Nack, but received: {}", pubAck)
+        }
+    }
+
+    fun registerFunctions(functions: Set<GeoFaaSFunction>, fence: Geofence): Boolean { //FIXME: should update CALL subscriptions in geoBroker when remote FaaS added/removed serving function
+        val subscriptions = subscribedFunctionsList()
+        val callSubs = subscriptions.filter { it.value.contains("call") } // assume Cloud either subscribed to both Nack & Call or none
+//        val nackSubs = subscriptions.filter { it.value.contains("nack") }
+
+        when (mode){
+            ClientType.EDGE, ClientType.CLOUD -> {
+                functions.forEach { func ->
+                    if (callSubs[func.name]?.contains("call") == true) {
+                        logger.debug("$id already subscribed to '${func.name}' function calls")
+                    } else {
+                        val sub: MutableSet<ListeningTopic>? = subscribeFunction(func.name, fence)
+                        if (sub != null) {
+                            logger.info("new function '${func.name}' has registered to the $id, and will be served for the new requests")
+                        } else {
+                            logger.fatal("failed to register the '${func.name}' function to the $id; mode:$mode!")
+                            return false
+                        }
+                    }
+                }
+                return true
+            }
+            else -> {
+                logger.fatal("Unexpected! '$id' of type 'geoFaasType' can't access registerFunction()")
+                return false
+            }
         }
     }
 }

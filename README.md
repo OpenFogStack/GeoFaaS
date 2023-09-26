@@ -104,5 +104,8 @@ GeoFaaS is independent of the FaaS module. tinyFaaS could be replaced by any Faa
 - Client's subscription geofence = a circle around itself (with a `2.1` radius)  
 - The `/result` from any GeoFaaS server is not forwarded to other brokers, as the client is already subscribed to responsible (same) broker
 - The GeoFaaS-Cloud's subscription geofence is the world, therefore it is responsible for requests. Hence its Location is 0.0:0.0
-- The broker areas don't overlap, that means for a client there is only one responsible GeoFaaS server  
+- The broker areas don't overlap, that means for a client there is only one responsible GeoFaaS server 
+- GeFaaS-Cloud subscribes to both `/call` (for clients that are far from any Edge server) and `/nack` (for offloading)
+- GeoFaaS-Edge subscribes only to `/call`s
+- ClientGeoFaaS subscribes to `/result` and `/ack` around itself when calls a function
 

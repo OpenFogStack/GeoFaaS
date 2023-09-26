@@ -3,12 +3,10 @@ package geofaas
 import de.hasenburg.geobroker.commons.model.spatial.Geofence
 import de.hasenburg.geobroker.commons.model.spatial.Location
 import de.hasenburg.geobroker.commons.model.spatial.toGeofence
-//import de.hasenburg.geobroker.server.distribution.BrokerAreaManager
 import io.ktor.client.call.*
 import org.apache.logging.log4j.LogManager
 import geofaas.Model.FunctionAction
 import geofaas.Model.GeoFaaSFunction
-import geofaas.Model.ListeningTopic
 import geofaas.Model.ClientType
 import geofaas.Model.FunctionMessage
 
@@ -17,28 +15,11 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
     private val gbClient = GBClientServer(loc, debug, host, port, id, ClientType.EDGE, brokerAreaManager)
     private var faasRegistry = mutableListOf<TinyFaasClient>()
     // returns ture if success to Subscribe to all the functions
-    fun registerFunctions(functions: Set<GeoFaaSFunction>, fence: Geofence): Boolean { //FIXME: should update CALL subscriptions in geoBroker when remote FaaS added/removed serving function
-        val subscribedFunctionsName = gbClient.subscribedFunctionsList().distinct() // distinct removes duplicates (/result & /ack)
-        functions.forEach { func ->
-            if (func.name in subscribedFunctionsName) {
-                logger.debug("GeoFaaS already subscribed to '${func.name}' function calls")
-            } else {
-                val sub: MutableSet<ListeningTopic>? = gbClient.subscribeFunction(func.name, fence)
-                if (sub != null) {
-                    logger.info("new function '${func.name}' has registered to the GeoFaaS, and will be served for the new requests")
-                } else {
-                    logger.fatal("failed to register the '${func.name}' function to the GeoFaaS ${gbClient.mode}!")
-                    return false
-                }
-            }
-        }
-        return true
-    }
 
     suspend fun registerFaaS(tf: TinyFaasClient): Boolean {
         val funcs: Set<GeoFaaSFunction> = tf.functions()
         if (funcs.isNotEmpty()) {
-            val registerSuccess = registerFunctions(funcs, gbClient.brokerAreaManager.ownBrokerArea.coveredArea)
+            val registerSuccess = gbClient.registerFunctions(funcs, gbClient.brokerAreaManager.ownBrokerArea.coveredArea)
             return if (registerSuccess) {
                 logger.info("new FaaS's functions have been registered")
                 faasRegistry += tf
@@ -56,7 +37,7 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
     }
 
     suspend fun handleNextRequest() {
-        val newMsg :FunctionMessage? = gbClient.listen(FunctionAction.CALL) // blocking
+        val newMsg :FunctionMessage? = gbClient.listenFor("CALL") // blocking
         if (newMsg != null) {
             val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
             if (newMsg.funcAction == FunctionAction.CALL) {
@@ -81,7 +62,6 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
                 }
             } else {
                 logger.error("The new request is not a CALL, but a ${newMsg.funcAction}!")
-                // TODO ADD, NACK
             }
         }
     }
@@ -114,6 +94,7 @@ suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-r
     if (registerSuccess) {
         repeat(args[1].toInt()){
             gf.handleNextRequest() //TODO: call in a coroutine? or a separate thread
+            println("$it requests processed")
         }
     }
     gf.terminate()

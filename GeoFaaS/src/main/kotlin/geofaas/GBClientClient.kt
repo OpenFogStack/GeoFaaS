@@ -32,14 +32,14 @@ class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", 
             } else { logger.error("Unexpected! $logMsg", pubAck); return null }
 
             // Wait for GeoFaaS's response
-            val ack: FunctionMessage? = listen(FunctionAction.ACK)
+            val ack: FunctionMessage? = listenFor("ACK")
             var res: FunctionMessage? = null
             if (ack != null) {
                 if (ack.funcAction == FunctionAction.ACK) {
                     logger.info("new Ack received")
                     when (ack.typeCode) {
                         TypeCode.NORMAL -> {
-                            res = listen(FunctionAction.RESULT)
+                            res = listenFor("RESULT")
                         }
                         TypeCode.PIGGY -> {
                             return null //TODO: Implement if Ack is piggybacked

@@ -9,7 +9,6 @@ import de.hasenburg.geobroker.commons.model.message.Topic
 import de.hasenburg.geobroker.commons.model.spatial.Geofence
 import de.hasenburg.geobroker.commons.model.spatial.Location
 import de.hasenburg.geobroker.commons.setLogLevel
-import geofaas.Model.FunctionAction
 import geofaas.Model.FunctionMessage
 import geofaas.Model.ListeningTopic
 import geofaas.Model.ClientType
@@ -51,9 +50,8 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
         var newTopics: MutableSet<ListeningTopic> = mutableSetOf()
         var baseTopic = "functions/$funcName"
         baseTopic += when (mode) {
-            ClientType.EDGE   -> "/call"
+            ClientType.EDGE, ClientType.CLOUD   -> "/call"
             ClientType.CLIENT -> "/result"
-            ClientType.CLOUD  -> "/nack"
         }
         val topic = Topic(baseTopic)
         val newSubscribe = subscribe(topic, fence) //subscribe(baseTopic, fence, functionAction)
@@ -61,6 +59,11 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
 
         if (mode == ClientType.CLIENT && newSubscribe != null) { // Client subscribes to two topics
             val ackTopic = Topic("functions/$funcName/ack")
+            val ackSubscribe = subscribe(ackTopic, fence)
+            if (ackSubscribe != null) { newTopics.add(ListeningTopic(ackTopic, fence)) }
+        }
+        if (mode == ClientType.CLOUD && newSubscribe != null) { // Cloud subscribes to two topics
+            val ackTopic = Topic("functions/$funcName/nack")
             val ackSubscribe = subscribe(ackTopic, fence)
             if (ackSubscribe != null) { newTopics.add(ListeningTopic(ackTopic, fence)) }
         }
@@ -90,7 +93,7 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
         return null
     }
 
-    fun listen(type: FunctionAction): FunctionMessage? {
+    fun listenFor(type: String): FunctionMessage? {
         // function call
         logger.info("Listening to the geoBroker server for a '$type'...")
         val msg = remoteGeoBroker.receive() // blocking
@@ -114,11 +117,12 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
         }
     }
 
-    // returns a list of function names, either listening to call, results, or ack/nack (since a client is either pub or sub of a topic not both)
-    fun subscribedFunctionsList(): List<String> {
+    // returns a map of function name to either call, result, or ack/nack
+    fun subscribedFunctionsList(): Map<String, List<String>> {
         val functionCalls = listeningTopics.map { pair -> pair.topic.topic }//.filter { it.endsWith("/call") }
         logger.debug("functions that $id already listening to: {}", functionCalls)
-        return functionCalls.map { it.substringAfter("/").substringBefore('/') }.distinct() // name of function is between '/', e.g. "functions/f1/call"
+        return functionCalls.map { val partialTopic = it.substringAfter("/").split("/");
+        listOf(partialTopic.first(), partialTopic[1])}.groupBy { it.first() }.mapValues { it.value.map { pair -> pair[1] } }// take name of function and the action between '/', e.g. functions/"f1/call"
     }
 
     // follow geoBroker instructions to Disconnect
