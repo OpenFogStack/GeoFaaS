@@ -104,7 +104,11 @@ class DisGBAtSubscriberMatchingLogic(private val clientDirectory: ClientDirector
                                 brokers: Socket) {
 
         val reasonCode: ReasonCode
-        val publisherLocation = clientDirectory.getClientLocation(clientIdentifier)
+        val publisherLocation : Location?
+        if (clientIdentifier.startsWith("GeoFaaS-Cloud"))
+            publisherLocation = payload.geofence.center // fake publisher location to client location
+        else
+            publisherLocation = clientDirectory.getClientLocation(clientIdentifier) // default behavior
 
         if (publisherLocation == null) { // null if client is not connected
             logger.debug("Client {} is not connected or has not provided a location", clientIdentifier)
@@ -125,6 +129,8 @@ class DisGBAtSubscriberMatchingLogic(private val clientDirectory: ClientDirector
             var ourReasonCode = ReasonCode.NoMatchingSubscribers
             // check if own broker area intersects with the message geofence
             if (brokerAreaManager.checkOurAreaForGeofenceIntersection(payload.geofence)) {
+                // even if the condition is true, publishMessageToLocalClients could return 'NoMatchingSubscribers',
+                // However, it will forward it to other brokers. reason code will change in the next statement to 'NoMatchingSubscribersButForwarded'
                 ourReasonCode = publishMessageToLocalClients(publisherLocation,
                         payload,
                         clientDirectory,
