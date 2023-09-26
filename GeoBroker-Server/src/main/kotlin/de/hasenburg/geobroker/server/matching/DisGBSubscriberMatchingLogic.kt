@@ -1,5 +1,6 @@
 package de.hasenburg.geobroker.server.matching
 
+import de.hasenburg.geobroker.commons.model.disgb.BrokerInfo
 import de.hasenburg.geobroker.commons.model.message.Payload.*
 import de.hasenburg.geobroker.commons.model.message.ReasonCode
 import de.hasenburg.geobroker.commons.model.message.toZMsg
@@ -115,15 +116,20 @@ class DisGBAtSubscriberMatchingLogic(private val clientDirectory: ClientDirector
             reasonCode = ReasonCode.NotConnectedOrNoLocation
         } else {
 
-            // find other brokers whose broker area intersects with the message geofence
-            val otherBrokers = brokerAreaManager.getOtherBrokersIntersectingWithGeofence(payload.geofence)
-            for (otherBroker in otherBrokers) {
-                logger.debug("Broker area of {} intersects with message from client {}",
+
+            // if this is a result from a GeoFaaS server, it must deliverd directly
+            var otherBrokers = mutableListOf<BrokerInfo>()
+            if (!(clientIdentifier.startsWith("GeoFaaS-") && payload.topic.topic.endsWith("result"))) {
+                // find other brokers whose broker area intersects with the message geofence
+                otherBrokers = brokerAreaManager.getOtherBrokersIntersectingWithGeofence(payload.geofence)
+                for (otherBroker in otherBrokers) {
+                    logger.debug("Broker area of {} intersects with message from client {}",
                         otherBroker.brokerId,
                         clientIdentifier)
-                // send message to BrokerCommunicator who takes care of the rest
-                BrokerForwardPublishPayload(payload, publisherLocation).toZMsg(otherBroker.brokerId).send(brokers)
+                    // send message to BrokerCommunicator who takes care of the rest
+                    BrokerForwardPublishPayload(payload, publisherLocation).toZMsg(otherBroker.brokerId).send(brokers)
 
+                }
             }
 
             var ourReasonCode = ReasonCode.NoMatchingSubscribers

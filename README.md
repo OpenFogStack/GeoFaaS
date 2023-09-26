@@ -66,7 +66,7 @@ messageProcessors = 2
 - 'granularity' is the accuracy for location queries. the bigger, the smaller tiles of world map, therefore more accuracy.
 - 'messageProcessors' is the number of ZMQ message processors (check DisGBSubscriberMatchingServerLogic.java)
 - 'brokerCommunicators' is the number of ZMQ message communicators; is also a parameter used in each message processor and broker communicator (ZMQProcessStarter.java)
-- 
+
 
 ## **Running**
 - Run geoBroker servers in Distributed mode (frankfurt & paris sample):
@@ -88,6 +88,7 @@ messageProcessors = 2
 ### Development tools
 - [Draw lat:long + radius on map](https://www.freemaptools.com/radius-around-point.htm)
 - for some strange reasons the broker areas in `<disgb-server-config>.json` are defined as first "long" then lat; Well-known text (WKT) format : `BUFFER (POINT (long lat), radius)`, that means reverse of common pair and also `Location.kt`
+- geoBroker areas work unexpected. they seem to be bigger than the default radius 2.1 (KM?). geoBroker areas intersect with its clients far away (but not very far)
 
 ## Dependencies
 - Kotlin 1.7.20  
@@ -96,7 +97,12 @@ messageProcessors = 2
 - JVM  
 - [Go 1.20.6](https://go.dev/dl/go1.20.6.linux-arm64.tar.gz) (for tinyFaaS)    
 
-## **Hardcoded DisGB config (GeoFaaS requirements)**
+## **Hardcoded DisGB config & assumptions (GeoFaaS requirements)**
 GeoFaaS is independent of the FaaS module. tinyFaaS could be replaced by any FaaS. That's why only DisGB (geoBroker) config mentioned below:  
-- DiSGB mode: `disgb_subscriberMatching` RPs are near the subscribers
+- DiSGB mode: `disgb_subscriberMatching`. i.e. RPs are near the subscribers    
+- GeoFaaS's subscription geofence = broker area  
+- Client's subscription geofence = a circle around itself (with a `2.1` radius)  
+- The `/result` from any GeoFaaS server is not forwarded to other brokers, as the client is already subscribed to responsible (same) broker
+- The GeoFaaS-Cloud's subscription geofence is the world, therefore it is responsible for requests. Hence its Location is 0.0:0.0
+- The broker areas don't overlap, that means for a client there is only one responsible GeoFaaS server  
 
