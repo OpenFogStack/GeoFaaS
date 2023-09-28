@@ -101,6 +101,7 @@
                             <archive>
                                 <manifest>
                                     <mainClass>geofaas.EdgeKt</mainClass>
+<!--                                    <mainClass>geofaas.CloudKt</mainClass>-->
 <!--                                    <mainClass>geofaas.GBClientClientkt</mainClass>-->
                                 </manifest>
                                 <manifestEntries>
@@ -111,6 +112,8 @@
                                 <descriptorRef>jar-with-dependencies</descriptorRef>
                             </descriptorRefs>
                             <finalName>GeoFaaSEdge</finalName>
+<!--                            <finalName>GeoFaaSCloud</finalName>-->
+<!--                            <finalName>ClientGeoFaaS</finalName>-->
                         </configuration>
                         <phase>package</phase>
                         <goals>

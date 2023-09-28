@@ -98,22 +98,27 @@ class Cloud(loc: Location, debug: Boolean, host: String = "localhost", port: Int
     }
 }
 
-suspend fun main() {
+suspend fun main(args: Array<String>) {
     val GFServerMode = "Cloud"
     println(GFServerMode)
     val disgbRegistry = BrokerAreaManager(GFServerMode)
-    disgbRegistry.readFromFile("GeoBroker-Server/src/main/resources/jfsb/disgb_jfsb.json")
+    when (args[2]) { // initialize
+        "production" -> disgbRegistry.readFromFile("geobroker/config/disgb-registry.json")
+        "intellij"   -> disgbRegistry.readFromFile("GeoBroker-Server/src/main/resources/jfsb/disgb_jfsb.json")
+        "localjar"   -> disgbRegistry.readFromFile("../../GeoBroker-Server/src/main/resources/jfsb/disgb_jfsb.json")
+        else -> throw RuntimeException("Wrong running mode. please specify any of 'production', 'localjar', or 'intellij'")
+    }
     val brokerInfo = disgbRegistry.ownBrokerInfo
     val brokerArea: Geofence = disgbRegistry.ownBrokerArea.coveredArea // broker area: radius: 2.1
     println(brokerArea.center)
-    val gf = Cloud(brokerArea.center, true, "localhost", 5560, "GeoFaaS-Cloud1", brokerAreaManager =  disgbRegistry)
+    val gf = Cloud(brokerArea.center, true, brokerInfo.ip, brokerInfo.port, "GeoFaaS-Cloud1", brokerAreaManager =  disgbRegistry)
     val tf = TinyFaasClient("localhost", 8000)
 
     val registerSuccess = gf.registerFaaS(tf)
     if (registerSuccess) {
-        repeat(1){
+        repeat(args[1].toInt()){
             gf.handleNextRequest() //TODO: call in a coroutine? or a separate thread
-            println("$it requests processed")
+            println("${it+1} requests processed")
         }
     }
     gf.terminate()

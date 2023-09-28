@@ -48,6 +48,7 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
                     val response = selectedFaaS.call(newMsg.funcName, newMsg.data)
                     logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
 
+//                    logger.warn("Offloading all requests! for debug purposes!")
                     if (response != null) {
                         val responseBody: String = response.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
                         gbClient.sendResult(newMsg.funcName, responseBody, clientFence)
@@ -75,7 +76,7 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
     }
 }
 
-suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-registry.json)
+suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-registry.json), epochs, and running mode
     println(args[0])
     val disgbRegistry = BrokerAreaManager(args[0]) // broker id
     when (args[2]) { // initialize
@@ -94,7 +95,7 @@ suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-r
     if (registerSuccess) {
         repeat(args[1].toInt()){
             gf.handleNextRequest() //TODO: call in a coroutine? or a separate thread
-            println("$it requests processed")
+            println("${it+1} requests processed")
         }
     }
     gf.terminate()
