@@ -106,32 +106,17 @@ class DisGBAtSubscriberMatchingLogic(private val clientDirectory: ClientDirector
 
         val reasonCode: ReasonCode
         val publisherLocation : Location?
-        if (clientIdentifier.startsWith("GeoFaaS-Cloud"))
-            publisherLocation = payload.geofence.center // fake publisher location to client location
+        publisherLocation = if (clientIdentifier.startsWith("GeoFaaS-"))
+            payload.geofence.center // fake publisher location to client location
         else
-            publisherLocation = clientDirectory.getClientLocation(clientIdentifier) // default behavior
+            clientDirectory.getClientLocation(clientIdentifier) // default behavior
 
         if (publisherLocation == null) { // null if client is not connected
             logger.debug("Client {} is not connected or has not provided a location", clientIdentifier)
             reasonCode = ReasonCode.NotConnectedOrNoLocation
         } else {
 
-
-            // if this is a result from a GeoFaaS server, it must deliverd directly
-            var otherBrokers = mutableListOf<BrokerInfo>()
-            if (!(clientIdentifier.startsWith("GeoFaaS-") && payload.topic.topic.endsWith("result"))) {
-                // find other brokers whose broker area intersects with the message geofence
-                otherBrokers = brokerAreaManager.getOtherBrokersIntersectingWithGeofence(payload.geofence)
-                for (otherBroker in otherBrokers) {
-                    logger.debug("Broker area of {} intersects with message from client {}",
-                        otherBroker.brokerId,
-                        clientIdentifier)
-                    // send message to BrokerCommunicator who takes care of the rest
-                    BrokerForwardPublishPayload(payload, publisherLocation).toZMsg(otherBroker.brokerId).send(brokers)
-
-                }
-            }
-
+            //1: local subscribers
             var ourReasonCode = ReasonCode.NoMatchingSubscribers
             // check if own broker area intersects with the message geofence
             if (brokerAreaManager.checkOurAreaForGeofenceIntersection(payload.geofence)) {
@@ -143,6 +128,25 @@ class DisGBAtSubscriberMatchingLogic(private val clientDirectory: ClientDirector
                         topicAndGeofenceMapper,
                         clients,
                         logger)
+            }
+
+            //2: other brokers' subscribers
+            var otherBrokers = mutableListOf<BrokerInfo>()
+            // if this is a 'result' from a 'GeoFaaS' Edge server, it must be delivered locally only, 'Except' the Cloud
+            val isResultFromEdge = payload.topic.topic.endsWith("result") && clientIdentifier.startsWith("GeoFaaS-") && !clientIdentifier.startsWith("GeoFaaS-Cloud")
+            // if this is a 'call' and there is a local subscriber for that, it must be delivered locally only
+            val isCallWithNoLocalSubscriber = payload.topic.topic.endsWith("call") && ourReasonCode != ReasonCode.NoMatchingSubscribers
+            if (!(isResultFromEdge) && !(isCallWithNoLocalSubscriber)) {
+                // find other brokers whose broker area intersects with the message geofence
+                otherBrokers = brokerAreaManager.getOtherBrokersIntersectingWithGeofence(payload.geofence)
+                for (otherBroker in otherBrokers) {
+                    logger.debug("Broker area of {} intersects with message from client {}",
+                        otherBroker.brokerId,
+                        clientIdentifier)
+                    // send message to BrokerCommunicator who takes care of the rest
+                    BrokerForwardPublishPayload(payload, publisherLocation).toZMsg(otherBroker.brokerId).send(brokers)
+
+                }
             }
 
             reasonCode = if (otherBrokers.size > 0 && ourReasonCode == ReasonCode.NoMatchingSubscribers) {
@@ -195,6 +199,8 @@ class DisGBAtSubscriberMatchingLogic(private val clientDirectory: ClientDirector
     override fun processBrokerForwardPublish(otherBrokerId: String, payload: BrokerForwardPublishPayload,
                                              clients: Socket, brokers: Socket) {
 
+        logger.debug(">>> inside 'processBrokerForwardPublish()'<<<")
+        logger.debug(">>> otherBrokerId: $otherBrokerId, ")
         // the id is determined by ZeroMQ based on the first frame, so here it is the id of the forwarding broker
         logger.debug("Processing BrokerForwardPublish from broker {}, message is {}",
                 otherBrokerId,

@@ -28,9 +28,8 @@ hx ~/.profile # for helix edior, alternatively vim or nano, etc.
 ```
 ### Docker 
 - [official recipe for raspberry pi](https://docs.docker.com/engine/install/raspberry-pi-os/#install-using-the-repository)
-- [same for debian](https://docs.docker.com/engine/install/debian/)
-- in the mentioned doc, you can install both latest or specific version of docker
-- I needed to add current user to the docker group and logout/login. `sudo usermod -aG docker ${USER}`. Check [post install steps](https://docs.docker.com/engine/install/linux-postinstall/)
+- [same for debian](https://docs.docker.com/engine/install/debian/). you can install both latest or specific version of docker
+- I needed to add current user to the docker group and logout/login. `sudo usermod -aG docker ${USER}`. Check the [post install steps](https://docs.docker.com/engine/install/linux-postinstall/)
 
 ### Setup codes (To be updated)
 ```
@@ -45,13 +44,13 @@ mkdir geobroker && mkdir geobroker/config
 
 # FIXME. upload geobroker server Jar from your pc
 scp GeoBroker-Server.jar raspi-alpha:~/Documents/geobroker
-scp ../src/main/resources/jfsb/disgb_jfsb.json raspi-beta:Documents/geobroker/config/disgb-registery.json 
+scp ../src/main/resources/jfsb/disgb_jfsb.json raspi-beta:Documents/geobroker/config/disgb-registry.json 
 ```
-Make a config file for geoBroker server `nvim geobroker/config/disgb-amsterdam.toml`
+Make a config file for geoBroker server `nvim geobroker/config/disgb-berlin.toml`
 ```toml
 # server information
 [server]
-brokerId = "Amsterdam"
+brokerId = "Berlin"
 port = 5560
 granularity = 5
 messageProcessors = 2
@@ -70,18 +69,18 @@ messageProcessors = 2
 
 ## **Running**
 - Run geoBroker servers in Distributed mode (frankfurt & paris sample):
-  - in project source(frankfurt & paris sample): `java -jar GeoBroker-Server/out/GeoBroker-Server.jar GeoBroker-Server/src/main/resources/jfsb/disgbSM-frankfurt.toml`
-  - jars in remote server: 
+  1. in project source(frankfurt & paris sample): `java -jar GeoBroker-Server/out/GeoBroker-Server.jar GeoBroker-Server/src/main/resources/jfsb/disgbSM-frankfurt.toml`
+  2.  jars in remote server: 
     - `tmux new -s geofaas`
     - two terminals? `ctrl-b %`
     - `cd geobroker`
-    - ` java -jar GeoBroker-Server.jar config/disgb-amsterdam.toml`
+    - ` java -jar GeoBroker-Server.jar config/disgb-berlin.toml`
 - Run Corresponding FaaS (if any?)
   - tinyFaas function deployment (localfile):
     - `./scripts/upload.sh "test/fns/sieve-of-eratosthenes" "sieve" "nodejs" 1`
     - `./scripts/upload.sh "test/fns/echo-js" "echo" "nodejs" 1`
 - Run Corresponding GeoFaaS Edge (non-optional)
-  - `java -jar GeoFaaSEdge.jar Amsterdam 1` the broker id and number of listening epochs
+  - `java -jar GeoFaaSEdge.jar Berlin 1 production` the broker id, number of listening epochs, and running mode
 - Run Cloud
 - Run Client (if any?)
 
@@ -102,10 +101,12 @@ GeoFaaS is independent of the FaaS module. tinyFaaS could be replaced by any Faa
 - DiSGB mode: `disgb_subscriberMatching`. i.e. RPs are near the subscribers    
 - GeoFaaS's subscription geofence = broker area  
 - Client's subscription geofence = a circle around itself (with a `2.1` radius)  
-- The `/result` from any GeoFaaS server is not forwarded to other brokers, as the client is already subscribed to responsible (same) broker
-- The GeoFaaS-Cloud's subscription geofence is the world, therefore it is responsible for requests. Hence its Location is 0.0:0.0
+- The `/result` from any GeoFaaS server is not forwarded to potential brokers, as the client is already subscribed to responsible (same) broker
+- The `/call` from any entity is only forwarded to potential brokers if no local subscriber exists  
+- The GeoFaaS-Cloud's subscription geofence is the world, therefore it is responsible for requests. Hence, its Location is 0.0:0.0
 - The broker areas don't overlap, that means for a client there is only one responsible GeoFaaS server 
 - GeFaaS-Cloud subscribes to both `/call` (for clients that are far from any Edge server) and `/nack` (for offloading)
 - GeoFaaS-Edge subscribes only to `/call`s
 - ClientGeoFaaS subscribes to `/result` and `/ack` around itself when calls a function
+- GeoFaaS Message contains a Topic and Fence pair, declaring what topic and fence is the publisher is listening for response (empty topic if not listening for any response)  
 
