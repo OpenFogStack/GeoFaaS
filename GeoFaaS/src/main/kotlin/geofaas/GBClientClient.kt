@@ -14,7 +14,7 @@ import geofaas.Model.ListeningTopic
 import geofaas.Model.ListeningTopicPatched
 
 class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "ClientGeoFaaS1"): GeoBrokerClient(loc, ClientType.CLIENT, debug, host, port, id) {
-    fun callFunction(funcName: String, data: String, radiusDegree: Double): String? {
+    fun callFunction(funcName: String, data: String, radiusDegree: Double): FunctionMessage? {
         val pubFence = Geofence.circle(location, radiusDegree)
         val subFence = Geofence.circle(location, radiusDegree)
         // Subscribe for the response
@@ -47,7 +47,7 @@ class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", 
                     }
                 } else { logger.error("expected Ack but received '{}'", ack.funcAction)}
                 logger.debug("(any?) response received: {}", res)
-                return res?.data
+                return res
             } else { logger.error("null response received from GeoBroker! (Client.Listen())") }
             return null
             // Unsubscribe after receiving the response
@@ -71,9 +71,9 @@ fun main() {
         "hamburg" to Location(53.527248,9.986572),
         "belgium" to Location(50.597186,4.822998))
 
-    val client1 = GBClientClient(clientLoc["potsdam"]!!, true, "141.23.28.207", 5560)
-    val res: String? = client1.callFunction("sieve", "", 2.1)
-    if(res != null) println("Result: $res")
+    val client1 = GBClientClient(clientLoc["franceEast"]!!, true, "141.23.28.207", 5560)
+    val res: FunctionMessage? = client1.callFunction("sieve", "", 2.1)
+    if(res != null) println("Result: ${res.data}")
     sleepNoLog(2000, 0)
     client1.terminate()
 }
