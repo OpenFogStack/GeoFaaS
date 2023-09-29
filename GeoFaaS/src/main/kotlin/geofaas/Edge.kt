@@ -37,7 +37,7 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
     }
 
     suspend fun handleNextRequest() {
-        val newMsg :FunctionMessage? = gbClient.listenFor("CALL") // blocking
+        val newMsg :FunctionMessage? = gbClient.listenFor("CALL", 0) // blocking
         if (newMsg != null) {
             val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
             if (newMsg.funcAction == FunctionAction.CALL) {

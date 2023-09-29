@@ -37,7 +37,7 @@ class Cloud(loc: Location, debug: Boolean, host: String = "localhost", port: Int
     }
 
     suspend fun handleNextRequest() {
-        val newMsg :FunctionMessage? = gbClient.listenFor("CALL or NACK") // blocking
+        val newMsg :FunctionMessage? = gbClient.listenFor("CALL or NACK", 0) // blocking
         if (newMsg != null) {
             val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
             if (newMsg.funcAction == FunctionAction.NACK) {

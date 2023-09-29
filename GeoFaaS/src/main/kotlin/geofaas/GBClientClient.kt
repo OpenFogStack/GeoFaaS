@@ -24,22 +24,19 @@ class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", 
             val responseTopicFence = ListeningTopicPatched(Topic("functions/$funcName/result"), subFence.toJson())
             val message = gson.toJson(FunctionMessage(funcName, FunctionAction.CALL, data, TypeCode.NORMAL, responseTopicFence))
             remoteGeoBroker.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call"), pubFence, message))
-            val pubAck = remoteGeoBroker.receive()
-            val logMsg = "GeoBroker's 'Publish ACK' for the '$funcName' CALL by $id: {}"
-            if (pubAck is Payload.PUBACKPayload) {
-                val noError = logPublishAck(pubAck, logMsg) // logs the reasonCode
-                if (!noError) return null
-            } else { logger.error("Unexpected! $logMsg", pubAck); return null }
+            val pubAck = remoteGeoBroker.receiveWithTimeout(3000)
+            val pubSuccess = processPublishAckSuccess(pubAck, funcName, FunctionAction.CALL, true)
+            if (!pubSuccess) return null
 
             // Wait for GeoFaaS's response
-            val ack: FunctionMessage? = listenFor("ACK")
+            val ack: FunctionMessage? = listenFor("ACK", 3500)
             var res: FunctionMessage? = null
             if (ack != null) {
                 if (ack.funcAction == FunctionAction.ACK) {
                     logger.info("new Ack received")
                     when (ack.typeCode) {
                         TypeCode.NORMAL -> {
-                            res = listenFor("RESULT")
+                            res = listenFor("RESULT", 0)
                         }
                         TypeCode.PIGGY -> {
                             return null //TODO: Implement if Ack is piggybacked
@@ -48,7 +45,7 @@ class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", 
                 } else { logger.error("expected Ack but received '{}'", ack.funcAction)}
                 logger.debug("(any?) response received: {}", res)
                 return res
-            } else { logger.error("null response received from GeoBroker! (Client.Listen())") }
+            } else { logger.error("Expected an ACK, but null response received from GeoBroker!") }
             return null
             // Unsubscribe after receiving the response
             //TODO: Unsubscribe

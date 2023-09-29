@@ -108,5 +108,6 @@ GeoFaaS is independent of the FaaS module. tinyFaaS could be replaced by any Faa
 - GeFaaS-Cloud subscribes to both `/call` (for clients that are far from any Edge server) and `/nack` (for offloading)
 - GeoFaaS-Edge subscribes only to `/call`s
 - ClientGeoFaaS subscribes to `/result` and `/ack` around itself when calls a function
-- GeoFaaS Message contains a Topic and Fence pair, declaring what topic and fence is the publisher is listening for response (empty topic if not listening for any response)  
+- GeoFaaS Message contains a Topic and Fence pair, declaring what topic and fence is the publisher is listening for response (empty topic if not listening for any response)
+- timeout for initial connection is 3 seconds. Client's listening timeout for the Ack after calling a function is 3.5 seconds.
 

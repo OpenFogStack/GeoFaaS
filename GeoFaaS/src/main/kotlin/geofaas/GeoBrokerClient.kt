@@ -12,6 +12,7 @@ import de.hasenburg.geobroker.commons.setLogLevel
 import geofaas.Model.FunctionMessage
 import geofaas.Model.ListeningTopic
 import geofaas.Model.ClientType
+import geofaas.Model.FunctionAction
 import org.apache.logging.log4j.Level
 import org.apache.logging.log4j.LogManager
 
@@ -25,7 +26,8 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
     init {
         if (debug) { setLogLevel(logger, Level.DEBUG) }
         remoteGeoBroker.send(Payload.CONNECTPayload(location)) // connect
-        var connAck = remoteGeoBroker.receive()
+        var connAck = remoteGeoBroker.receiveWithTimeout(3000)
+
         if (connAck is Payload.DISCONNECTPayload) {
             if(connAck.brokerInfo == null) { // retry with suggested broker
                 logger.fatal("No responsible broker found. $id can't connect to the remote geoBroker '$host:$port', ${connAck.reasonCode}!!")
@@ -34,14 +36,17 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
                 logger.warn("Changed the remote broker to the suggested: ${connAck.brokerInfo}")
                 remoteGeoBroker = SimpleClient(connAck.brokerInfo!!.ip, connAck.brokerInfo!!.port, identity = id)
                 remoteGeoBroker.send(Payload.CONNECTPayload(location)) // connect
-                connAck = remoteGeoBroker.receive()
+                connAck = remoteGeoBroker.receiveWithTimeout(3000)
             }
-        }
-        if (connAck is Payload.DISCONNECTPayload) {
-            logger.fatal("${connAck.reasonCode}! Failed to connect to suggested server! another suggested server? ${connAck.brokerInfo}")
-            throw RuntimeException("Error while connecting to the new geoBroker")
+            if (connAck is Payload.DISCONNECTPayload) {
+                logger.fatal("${connAck.reasonCode}! Failed to connect to suggested server! another suggested server? ${connAck.brokerInfo}")
+                throw RuntimeException("Error connecting to the new geoBroker")
+            }
+        } else if (connAck == null) {
+            throw RuntimeException("Error can't connect to geobroker $host:$port. Check the Address and try again")
         } else {
-            logger.info("Received geoBroker's answer (Conn ACK): {}", connAck)
+            logger.error("Unexpected 'Conn ACK'! Received geoBroker's answer: {}", connAck)
+            throw RuntimeException("Error while connecting to the geoBroker")
         }
     }
 
@@ -80,12 +85,12 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
     private fun subscribe(topic: Topic, fence: Geofence): ListeningTopic? {
         if (!isSubscribedTo(topic.topic)) {
             remoteGeoBroker.send(Payload.SUBSCRIBEPayload(topic, fence))
-            val subAck = remoteGeoBroker.receive()
+            val subAck = remoteGeoBroker.receiveWithTimeout(3000)
             if (subAck is Payload.SUBACKPayload){
                 if (subAck.reasonCode == ReasonCode.GrantedQoS0){
-                    logger.info("GeoBroker's Sub ACK by ${mode.name}:  for '${topic.topic}' in $fence: {}", subAck)
+                    logger.info("GeoBroker's Sub ACK for id:  for '${topic.topic}' in $fence: {}", subAck)
                     return ListeningTopic(topic, fence)
-                } else { logger.error("Error Subscribing to '${topic.topic}' by ${mode.name}. Reason: {}.", subAck.reasonCode) }
+                } else { logger.error("Error Subscribing to '${topic.topic}' by $id. Reason: {}.", subAck.reasonCode) }
             }
         } else {
             logger.error("already subscribed to the '${topic.topic}'")
@@ -93,10 +98,17 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
         return null
     }
 
-    fun listenFor(type: String): FunctionMessage? {
+    fun listenFor(type: String, timeout: Int): FunctionMessage? {
         // function call
         logger.info("Listening to the geoBroker server for a '$type'...")
-        val msg = remoteGeoBroker.receive() // blocking
+        val msg: Payload? = when (timeout){
+            0 -> remoteGeoBroker.receive() // blocking
+            else -> remoteGeoBroker.receiveWithTimeout(timeout)
+        }
+        if (timeout > 0 && msg == null) {
+            logger.error("Listening timeout (${timeout}ms)!")
+            return null
+        }
         logger.info("EVENT from geoBroker: {}", msg)
         if (msg is Payload.PUBLISHPayload) {
 // wiki:    msg.topic    => Topic(topic=functions/f1/call)
@@ -141,6 +153,20 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
      private fun isSubscribedTo(topic: String): Boolean { // NOTE: checks only the topic, not the fence
         return listeningTopics.map { pair -> pair.topic.topic }.any { it == topic }
      }
+
+    protected fun processPublishAckSuccess(pubAck: Payload?, funcName: String, funcAct: FunctionAction, withTimeout: Boolean): Boolean {
+        val logMsg = "GeoBroker's 'Publish ACK' for the '$funcName' $funcAct by $id: {}"
+        if (pubAck is Payload.PUBACKPayload) {
+            val noError = logPublishAck(pubAck, logMsg) // logs the reasonCode
+            if (!noError) return false
+        } else if (pubAck == null && withTimeout) {
+            logger.error("Timeout! no 'Publish ACK' received for '$funcName' $funcAct by $id")
+            return false
+        } else {
+            logger.error("Unexpected! $logMsg", pubAck)
+        }
+        return true
+    }
     protected fun logPublishAck(pubAck: Payload.PUBACKPayload, logMsg: String): Boolean {
         // logMsg: "GeoBroker's 'Publish ACK' for the '$funcName' ACK by $id: {}"
         when (pubAck.reasonCode) {
