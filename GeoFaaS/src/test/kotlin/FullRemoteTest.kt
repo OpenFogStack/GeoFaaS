@@ -1,16 +1,12 @@
 
 import de.hasenburg.geobroker.commons.model.spatial.Location
-import geofaas.BrokerAreaManager
 import geofaas.GBClientClient
 import geofaas.Model.FunctionMessage
 import org.apache.logging.log4j.LogManager
-import org.junit.After
-import org.junit.Before
 import org.junit.Test
 import org.junit.Assert.*
-import org.junit.Ignore
 
-class RemoteClientTest {
+class FullRemoteTest {
 
     private val logger = LogManager.getLogger()
     private lateinit var gbhost : String
@@ -45,7 +41,7 @@ class RemoteClientTest {
 //    }
 
     @Test
-    fun berlinOffloadsToCloud() {
+    fun berlinOffloadsToCloud() { // assumes Berlin offloads any request
         gbhost = brokerAddress["Berlin"]!!
         client1 = GBClientClient(clientLoc["potsdam"]!!, true, gbhost, gbPort)
         val res: FunctionMessage? = client1.callFunction("sieve", "", 2.1)
@@ -88,5 +84,4 @@ class RemoteClientTest {
         client1.terminate()
     }
 
-    //TODO test Edge respond with success (all edges?)
 }

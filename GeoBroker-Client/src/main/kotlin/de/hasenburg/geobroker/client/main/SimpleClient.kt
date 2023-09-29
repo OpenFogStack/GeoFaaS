@@ -9,8 +9,6 @@ import de.hasenburg.geobroker.commons.model.spatial.Location
 import de.hasenburg.geobroker.commons.sleepNoLog
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonConfiguration
 import org.apache.logging.log4j.LogManager
 import kotlin.system.exitProcess
 
@@ -23,7 +21,7 @@ private val logger = LogManager.getLogger()
  * It is possible to supply a [socketHWM], for more information on HWM, check out the ZeroMQ documentation.
  * If no HWM is supplied, 1000 is used.
  */
-class SimpleClient(ip: String, port: Int, socketHWM: Int = 1000, val identity: String = "SimpleClient-" + System.nanoTime()) {
+class SimpleClient(val ip: String, port: Int, socketHWM: Int = 1000, val identity: String = "SimpleClient-" + System.nanoTime()) {
 
     private val spDealer = SPDealer(ip, port, socketHWM)
 
