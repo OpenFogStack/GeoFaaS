@@ -44,7 +44,7 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
             }
         } else if (connAck == null) {
             throw RuntimeException("Error can't connect to geobroker $host:$port. Check the Address and try again")
-        } else {
+        } else if (connAck !is Payload.CONNACKPayload || connAck.reasonCode != ReasonCode.Success){
             logger.error("Unexpected 'Conn ACK'! Received geoBroker's answer: {}", connAck)
             throw RuntimeException("Error while connecting to the geoBroker")
         }
