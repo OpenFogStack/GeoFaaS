@@ -1,6 +1,5 @@
 package geofaas
 
-import com.google.gson.annotations.SerializedName
 import de.hasenburg.geobroker.commons.model.message.Topic
 import de.hasenburg.geobroker.commons.model.spatial.Geofence
 
@@ -11,9 +10,10 @@ object Model {
 
     data class GeoFaaSFunction (val name: String)
     data class ListeningTopic(val topic: Topic, val fence: Geofence)
-    data class ListeningTopicPatched(val topic: Topic?, val fence: String)
+    data class ResponseInfoPatched(val senderId: String, val topic: Topic?, val fence: String)
     //NOTE: null Topic = not listening for any response
-    //NOTE2: fence is JSON String, because Geofence is incompatible with GSON and cause stackoverflow
+    //NOTE2: the fence is a JSON String, because Geofence is incompatible with GSON and cause stackoverflow
     data class FunctionMessage (val funcName: String, val funcAction: FunctionAction, val data: String,
-                                val typeCode: TypeCode, val responseTopicFence: ListeningTopicPatched)
+                                val typeCode: TypeCode, val receiverId: String,
+                                val responseTopicFence: ResponseInfoPatched)
 }

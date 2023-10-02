@@ -50,7 +50,7 @@ class Cloud(loc: Location, debug: Boolean, host: String = "localhost", port: Int
 
                     if (response != null) {
                         val responseBody: String = response.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
-                        gbClient.sendResult(newMsg.funcName, responseBody, clientFence)
+                        gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.responseTopicFence.senderId)
                         logger.info("${gbClient.id}: sent the result '{}' to functions/${newMsg.funcName}/result", responseBody) // wiki: Found 1229 primes under 10000
                     } else { // connection refused?
                         logger.error("No response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address for the function call '${newMsg.funcName}'")
@@ -61,7 +61,7 @@ class Cloud(loc: Location, debug: Boolean, host: String = "localhost", port: Int
 //                    gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence)
                 }
             } else if(newMsg.funcAction == FunctionAction.CALL) { // behave same as Edge
-                gbClient.sendAck(newMsg.funcName, clientFence) // tell the client you received its request
+                gbClient.sendAck(newMsg.funcName, clientFence, newMsg.responseTopicFence.senderId) // tell the client you received its request
                 val registeredFunctionsName: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
                 if (newMsg.funcName in registeredFunctionsName){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
                     val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName)
@@ -70,7 +70,7 @@ class Cloud(loc: Location, debug: Boolean, host: String = "localhost", port: Int
 
                     if (response != null) {
                         val responseBody: String = response.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
-                        gbClient.sendResult(newMsg.funcName, responseBody, clientFence)
+                        gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.responseTopicFence.senderId)
                         logger.info("${gbClient.id}: sent the result '{}' to functions/${newMsg.funcName}/result", responseBody) // wiki: Found 1229 primes under 10000
                     } else { // connection refused?
                         logger.error("No response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address for the function call '${newMsg.funcName}'")

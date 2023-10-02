@@ -41,7 +41,7 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
         if (newMsg != null) {
             val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
             if (newMsg.funcAction == FunctionAction.CALL) {
-                gbClient.sendAck(newMsg.funcName, clientFence) // tell the client you received its request
+                gbClient.sendAck(newMsg.funcName, clientFence, newMsg.responseTopicFence.senderId) // tell the client you received its request
                 val registeredFunctionsName: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
                 if (newMsg.funcName in registeredFunctionsName){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
                     val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName)
@@ -51,15 +51,15 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
 //                    logger.warn("Offloading all requests! for debug purposes!")
                     if (response != null) {
                         val responseBody: String = response.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
-                        gbClient.sendResult(newMsg.funcName, responseBody, clientFence)
+                        gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.responseTopicFence.senderId)
                         logger.info("${gbClient.id}: sent the result '{}' to functions/${newMsg.funcName}/result", responseBody) // wiki: Found 1229 primes under 10000
                     } else { // connection refused?
                         logger.error("No response from the FaaS with '${selectedFaaS.host}' address for the function call '${newMsg.funcName}'")
-                        gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence)
+                        gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence, newMsg.responseTopicFence.senderId, "GeoFaaS-Cloud")
                     }
                 } else {
                     logger.fatal("No FaaS is serving the '${newMsg.funcName}' function!")
-                    gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence)
+                    gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence, newMsg.responseTopicFence.senderId, "GeoFaaS-Cloud")
                 }
             } else {
                 logger.error("The new request is not a CALL, but a ${newMsg.funcAction}!")
