@@ -18,7 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-// a clone with changes from geofaas server package, as there was a bug changing files there
+// a clone with changes from geofaas server package, as there was a bug changing files in geobroker server
 public class BrokerAreaManager {
 
 	private static final Logger logger = LogManager.getLogger();

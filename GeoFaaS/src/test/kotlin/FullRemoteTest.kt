@@ -43,18 +43,18 @@ class FullRemoteTest {
     @Test
     fun berlinOffloadsToCloud() { // assumes Berlin offloads any request
         gbhost = brokerAddress["Berlin"]!!
-        client1 = GBClientClient(clientLoc["potsdam"]!!, true, gbhost, gbPort)
+        client1 = GBClientClient(clientLoc["potsdam"]!!, true, gbhost, gbPort, "ClientGeoFaaSTest")
         val res: FunctionMessage? = client1.callFunction("sieve", "", 2.1)
         assertNotNull(res)
         assertEquals("Found 1229 primes under 10000", res?.data)
         assertEquals(gbhost, client1.remoteGeoBroker.ip) // client shouldn't switch to the other broker
-        assertEquals("{\"wkt\":\"ENVELOPE (-180, 180, 90, -90)\"}" ,res?.responseTopicFence?.fence)
+        assertEquals("{\"wkt\":\"ENVELOPE (-180, 180, 90, -90)\"}" ,res?.responseTopicFence?.fence) // the response should be from the cloud
         client1.terminate()
     }
     @Test
     fun parisRespondsToParisClient() {
         gbhost = brokerAddress["Paris"]!!
-        client1 = GBClientClient(clientLoc["parisNonOverlap"]!!, true, gbhost, gbPort)
+        client1 = GBClientClient(clientLoc["parisNonOverlap"]!!, true, gbhost, gbPort, "ClientGeoFaaSTest")
         val res: FunctionMessage? = client1.callFunction("sieve", "", 2.1)
         assertNotNull(res)
         assertEquals("Found 1229 primes under 10000", res?.data)
@@ -66,7 +66,7 @@ class FullRemoteTest {
     @Test
     fun frankfurtClientRedirectsToFrankfurtBroker() {
         gbhost = brokerAddress["Berlin"]!!
-        client1 = GBClientClient(clientLoc["frankfurtEdge"]!!, true, gbhost, gbPort)
+        client1 = GBClientClient(clientLoc["frankfurtEdge"]!!, true, gbhost, gbPort, "ClientGeoFaaSTest")
         assertNotEquals(gbhost, client1.remoteGeoBroker.ip) // client should switch to the other broker
         assertEquals(brokerAddress["Frankfurt"]!!, client1.remoteGeoBroker.ip)
         client1.terminate()
@@ -75,7 +75,7 @@ class FullRemoteTest {
     @Test
     fun amsterdamClientRedirectsToCloudBrokerAndGetsResponse() {
         gbhost = brokerAddress["Frankfurt"]!!
-        client1 = GBClientClient(clientLoc["amsterdam"]!!, true, gbhost, gbPort)
+        client1 = GBClientClient(clientLoc["amsterdam"]!!, true, gbhost, gbPort, "ClientGeoFaaSTest")
         assertNotEquals(gbhost, client1.remoteGeoBroker.ip) // client should switch to the other broker
         assertEquals(brokerAddress["Cloud"]!!, client1.remoteGeoBroker.ip)
         val res: FunctionMessage? = client1.callFunction("sieve", "", 2.1)
