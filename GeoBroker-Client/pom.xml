@@ -19,7 +19,7 @@
         <dependency>
             <groupId>de.hasenburg</groupId>
             <artifactId>GeoBroker-Commons</artifactId>
-            <version>${version}</version>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>me.tongfei</groupId>

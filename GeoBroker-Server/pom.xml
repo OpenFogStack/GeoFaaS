@@ -54,12 +54,12 @@
         <dependency>
             <groupId>de.hasenburg</groupId>
             <artifactId>GeoBroker-Commons</artifactId>
-            <version>${version}</version>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>de.hasenburg</groupId>
             <artifactId>GeoBroker-Client</artifactId>
-            <version>${version}</version>
+            <version>${project.version}</version>
         </dependency>
     </dependencies>
 
