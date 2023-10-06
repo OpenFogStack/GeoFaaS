@@ -60,43 +60,52 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
             ClientType.CLIENT -> "/result"
         }
         val topic = Topic(baseTopic)
-        val newSubscribe = subscribe(topic, fence) //subscribe(baseTopic, fence, functionAction)
-        if (newSubscribe != null) { newTopics.add(ListeningTopic(topic, fence)) }
+        val newSubscribe: String? = subscribe(topic, fence) //subscribe(baseTopic, fence, functionAction)
+        if (newSubscribe == "success") { newTopics.add(ListeningTopic(topic, fence)) }
 
-        if (mode == ClientType.CLIENT && newSubscribe != null) { // Client subscribes to two topics
-            val ackTopic = Topic("functions/$funcName/ack")
-            val ackSubscribe = subscribe(ackTopic, fence)
-            if (ackSubscribe != null) { newTopics.add(ListeningTopic(ackTopic, fence)) }
-        }
-        if (mode == ClientType.CLOUD && newSubscribe != null) { // Cloud subscribes to two topics
-            val ackTopic = Topic("functions/$funcName/nack")
-            val ackSubscribe = subscribe(ackTopic, fence)
-            if (ackSubscribe != null) { newTopics.add(ListeningTopic(ackTopic, fence)) }
-        }
-        return if (newTopics.isNotEmpty()) {
-            newTopics.forEach {  listeningTopics.add(it) } // add to local registry
-            logger.debug("ListeningTopics appended by: {}", listeningTopics)
-            newTopics // for error handling purposes
-        } else {
-            logger.debug("ListeningTopics didn't change. Nothing subscribed new!")
-            null
-        }
+        if (newSubscribe != null) {
+            if (mode == ClientType.CLIENT) { // Client subscribes to two topics
+                val ackTopic = Topic("functions/$funcName/ack")
+                val ackSubscribe = subscribe(ackTopic, fence)
+                if (ackSubscribe == "success") { newTopics.add(ListeningTopic(ackTopic, fence)) }
+            }
+            if (mode == ClientType.CLOUD) { // Cloud subscribes to two topics
+                val nackTopic = Topic("functions/$funcName/nack")
+                val nackSubscribe = subscribe(nackTopic, fence)
+                if (nackSubscribe == "success") { newTopics.add(ListeningTopic(nackTopic, fence)) }
+            }
+            return if (newTopics.isNotEmpty()) {
+                newTopics.forEach {  listeningTopics.add(it) } // add to local registry
+                logger.debug("ListeningTopics appended by: {}", listeningTopics)
+                newTopics // for error handling purposes
+            } else {
+                logger.debug("ListeningTopics didn't change. Nothing subscribed new!")
+                mutableSetOf<ListeningTopic>()
+            }
+        } else
+            return null // failure
     }
 
-    private fun subscribe(topic: Topic, fence: Geofence): ListeningTopic? {
+    private fun subscribe(topic: Topic, fence: Geofence): String? {
         if (!isSubscribedTo(topic.topic)) {
             remoteGeoBroker.send(Payload.SUBSCRIBEPayload(topic, fence))
             val subAck = remoteGeoBroker.receiveWithTimeout(3000)
-            if (subAck is Payload.SUBACKPayload){
+            return if (subAck is Payload.SUBACKPayload){
                 if (subAck.reasonCode == ReasonCode.GrantedQoS0){
                     logger.info("GeoBroker's Sub ACK for id:  for '${topic.topic}' in $fence: {}", subAck)
-                    return ListeningTopic(topic, fence)
-                } else { logger.error("Error Subscribing to '${topic.topic}' by $id. Reason: {}.", subAck.reasonCode) }
+                    "success"
+                } else {
+                    logger.error("Error Subscribing to '${topic.topic}' by $id. Reason: {}.", subAck.reasonCode)
+                    null // failure
+                }
+            } else {
+                logger.fatal("Expected a SubAck Payload! {}", subAck)
+                null // failure
             }
         } else {
-            logger.error("already subscribed to the '${topic.topic}'")
+            logger.warn("already subscribed to the '${topic.topic}'")
+            return  "already exist"
         }
-        return null
     }
 
     fun listenFor(type: String, timeout: Int): FunctionMessage? {
