@@ -3,6 +3,7 @@ package geofaas
 import com.google.gson.Gson
 import de.hasenburg.geobroker.client.main.SimpleClient
 import de.hasenburg.geobroker.commons.communication.ZMQProcessManager
+import de.hasenburg.geobroker.commons.model.disgb.BrokerInfo
 import de.hasenburg.geobroker.commons.model.message.Payload
 import de.hasenburg.geobroker.commons.model.message.ReasonCode
 import de.hasenburg.geobroker.commons.model.message.Topic
@@ -17,7 +18,7 @@ import org.apache.logging.log4j.Level
 import org.apache.logging.log4j.LogManager
 
 // Basic Geobroker client for GeoFaaS system
-abstract class GeoBrokerClient(val location: Location, val mode: ClientType, debug: Boolean, host: String = "localhost", port: Int = 5559, val id: String = "GeoFaaSAbstract") {
+abstract class GeoBrokerClient(var location: Location, val mode: ClientType, debug: Boolean, host: String = "localhost", port: Int = 5559, val id: String = "GeoFaaSAbstract") {
     val logger = LogManager.getLogger()
     private var listeningTopics = mutableSetOf<ListeningTopic>()
     private val processManager = ZMQProcessManager()
@@ -28,25 +29,29 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
         remoteGeoBroker.send(Payload.CONNECTPayload(location)) // connect
         var connAck = remoteGeoBroker.receiveWithTimeout(3000)
 
-        if (connAck is Payload.DISCONNECTPayload) {
-            if(connAck.brokerInfo == null) { // retry with suggested broker
-                logger.fatal("${connAck.reasonCode}!! No responsible broker found or duplicate client id. $id can't connect to the remote geoBroker '$host:$port'.")
-                throw RuntimeException("Error while connecting to the geoBroker")
-            } else {
-                logger.warn("Changed the remote broker to the suggested: ${connAck.brokerInfo}")
-                remoteGeoBroker = SimpleClient(connAck.brokerInfo!!.ip, connAck.brokerInfo!!.port, identity = id)
-                remoteGeoBroker.send(Payload.CONNECTPayload(location)) // connect
-                connAck = remoteGeoBroker.receiveWithTimeout(3000)
-            }
+        val connSuccess = processConnAckSuccess(connAck, BrokerInfo(remoteGeoBroker.identity, host, port), true)
+        if (!connSuccess) {
             if (connAck is Payload.DISCONNECTPayload) {
-                logger.fatal("${connAck.reasonCode}! Failed to connect to suggested server! another suggested server? ${connAck.brokerInfo}")
-                throw RuntimeException("Error connecting to the new geoBroker")
+                if(connAck.brokerInfo == null) { // retry with suggested broker
+                    logger.fatal("${connAck.reasonCode}!! No responsible broker found or duplicate client id. $id can't connect to the remote geoBroker '$host:$port'.")
+                    throw RuntimeException("Error while connecting to the geoBroker")
+                } else {
+                    val newBrokerInfo = connAck.brokerInfo!! // TODO replace with 'changeBroker()' and do the retry
+//                    val changeIsSuccess = changeBroker(newBrokerInfo)
+                    logger.warn("Changed the remote broker to the suggested: $newBrokerInfo")
+                    remoteGeoBroker = SimpleClient(newBrokerInfo.ip, newBrokerInfo.port, identity = id)
+                    remoteGeoBroker.send(Payload.CONNECTPayload(location)) // connect
+                    connAck = remoteGeoBroker.receiveWithTimeout(3000)
+                    val connSuccess = processConnAckSuccess(connAck, newBrokerInfo, true)
+                    if (!connSuccess)
+                        throw RuntimeException("Error connecting to the new geoBroker")
+                }
+            } else if (connAck == null) {
+                throw RuntimeException("Timeout! can't connect to geobroker $host:$port. Check the Address and try again")
+            } else {
+                logger.fatal("Unexpected 'Conn ACK'! Received geoBroker's answer: {}", connAck)
+                throw RuntimeException("Error while connecting to the geoBroker")
             }
-        } else if (connAck == null) {
-            throw RuntimeException("Error can't connect to geobroker $host:$port. Check the Address and try again")
-        } else if (connAck !is Payload.CONNACKPayload || connAck.reasonCode != ReasonCode.Success){
-            logger.error("Unexpected 'Conn ACK'! Received geoBroker's answer: {}", connAck)
-            throw RuntimeException("Error while connecting to the geoBroker")
         }
     }
 
@@ -139,6 +144,49 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
         }
     }
 
+    fun updateLocation(newLoc :Location) :Boolean{
+        remoteGeoBroker.send(Payload.PINGREQPayload(newLoc))
+        val pubAck = remoteGeoBroker.receiveWithTimeout(3000)
+        logger.debug("ping ack: {}", pubAck) //DISCONNECTPayload(reasonCode=WrongBroker, brokerInfo=BrokerInfo(brokerId=Frankfurt, ip=localhost, port=5559)
+        if(pubAck is Payload.DISCONNECTPayload) {
+            logger.warn("moved outside of the current broker's area ('${remoteGeoBroker.identity}').")
+            if (pubAck.reasonCode == ReasonCode.WrongBroker){ // you are now outside my area
+                location = newLoc // update the local, as the current broker is no longer responsible for us
+                if (pubAck.brokerInfo != null) {
+                    val changeIsSuccess = changeBroker(pubAck.brokerInfo!!)
+                    if (changeIsSuccess) {
+                        logger.debug("location updated to {}", location)
+                        return true
+                    } else {
+                        logger.fatal("Failed to change the broker. And the previous broker is no longer responsible")
+                        throw RuntimeException("Error updating the location to $newLoc")
+                    }
+                } else {
+                    logger.fatal("No broker is responsible for current location")
+                    throw RuntimeException("Error updating the location to $newLoc")
+                }
+            } else {
+                logger.fatal("unexpected reason code: {}", pubAck.reasonCode)
+                throw RuntimeException("Error updating the location to $newLoc")
+            }
+        } else if (pubAck is Payload.PINGRESPPayload) {
+            if(pubAck.reasonCode == ReasonCode.LocationUpdated) { // success
+                location = newLoc
+                logger.debug("location updated to {}", location)
+                return true
+            } else {
+                logger.fatal("unexpected reason code: {}", pubAck.reasonCode)
+                throw RuntimeException("Error updating the location to $newLoc")
+            }
+        } else if (pubAck == null) {
+            logger.error("Updating location failed! No response from the '${remoteGeoBroker.identity}' broker")
+            return false
+        } else {
+            logger.fatal("Unexpected ack when updating the location! Received geoBroker's answer: {}", pubAck)
+            throw RuntimeException("Error updating the location to $newLoc")
+        }
+    }
+
     // returns a map of function name to either call, result, or ack/nack
     fun subscribedFunctionsList(): Map<String, List<String>> {
         val functionCalls = listeningTopics.map { pair -> pair.topic.topic }//.filter { it.endsWith("/call") }
@@ -160,10 +208,45 @@ abstract class GeoBrokerClient(val location: Location, val mode: ClientType, deb
 //        exitProcess(0) // terminates current process
     }
 
-     private fun isSubscribedTo(topic: String): Boolean { // NOTE: checks only the topic, not the fence
-        return listeningTopics.map { pair -> pair.topic.topic }.any { it == topic }
-     }
+    protected fun changeBroker(broker: BrokerInfo): Boolean {
+        logger.warn("changing the remote broker to $broker...")
+        val oldBroker = remoteGeoBroker
+        remoteGeoBroker = SimpleClient(broker.ip, broker.port, identity = id)
+        remoteGeoBroker.send(Payload.CONNECTPayload(location)) // connect
 
+        val connAck = remoteGeoBroker.receiveWithTimeout(3000)
+        val connSuccess = processConnAckSuccess(connAck, broker, true)
+
+        if(connSuccess) {
+            logger.info("switched the remote broker to: ${broker.brokerId}")
+            oldBroker.tearDownClient()
+            return true
+        } else {
+            logger.error("failed to change the remote broker to: $broker")
+            remoteGeoBroker = oldBroker
+            return false
+        }
+    }
+    private fun isSubscribedTo(topic: String): Boolean { // NOTE: checks only the topic, not the fence
+        return listeningTopics.map { pair -> pair.topic.topic }.any { it == topic }
+    }
+
+    protected fun processConnAckSuccess(connAck: Payload?, broker: BrokerInfo, withTimeout: Boolean) :Boolean{
+        if (connAck is Payload.CONNACKPayload && connAck.reasonCode == ReasonCode.Success)
+            return true
+        else if (connAck is Payload.DISCONNECTPayload) {
+            logger.fatal("${connAck.reasonCode}! can't connect to the geobroker ${broker.ip}:${broker.port}. another suggested server? ${connAck.brokerInfo}")
+            return false
+        } else if (connAck == null) {
+            if (withTimeout)
+                throw RuntimeException("Timeout! can't connect to the geobroker ${broker.ip}:${broker.port}. Check the Address and try again")
+            else
+                throw RuntimeException("No Response! can't connect to the geobroker ${broker.ip}:${broker.port}. Check the Address and try again")
+        } else {
+            logger.fatal("Unexpected 'Conn ACK'! Received geoBroker's answer: {}", connAck)
+            return false
+        }
+    }
     protected fun processPublishAckSuccess(pubAck: Payload?, funcName: String, funcAct: FunctionAction, withTimeout: Boolean): Boolean {
         val logMsg = "GeoBroker's 'Publish ACK' for the '$funcName' $funcAct by $id: {}"
         if (pubAck is Payload.PUBACKPayload) {
