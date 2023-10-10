@@ -65,7 +65,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             ClientType.CLIENT -> "/result"
         }
         val topic = Topic(baseTopic)
-        val newSubscribe: String? = subscribe(topic, fence) //subscribe(baseTopic, fence, functionAction)
+        val newSubscribe: String? = subscribe(topic, fence)
         if (newSubscribe == "success") { newTopics.add(ListeningTopic(topic, fence)) }
 
         if (newSubscribe != null) {
@@ -81,7 +81,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             }
             return if (newTopics.isNotEmpty()) {
                 newTopics.forEach {  listeningTopics.add(it) } // add to local registry
-                logger.debug("ListeningTopics appended by: {}", listeningTopics)
+                logger.debug("ListeningTopics appended by ${newTopics.size}: {}", listeningTopics)
                 newTopics // for error handling purposes
             } else {
                 logger.debug("ListeningTopics didn't change. Nothing subscribed new!")
@@ -98,13 +98,14 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         return functionCalls.map { val partialTopic = it.substringAfter("/").split("/");
         listOf(partialTopic.first(), partialTopic[1])}.groupBy { it.first() }.mapValues { it.value.map { pair -> pair[1] } }// take name of function and the action between '/', e.g. functions/"f1/call"
     }
+    // returns three states: "success", null (failure), or "already exist"
     private fun subscribe(topic: Topic, fence: Geofence): String? {
         if (!isSubscribedTo(topic.topic)) {
             remoteGeoBroker.send(Payload.SUBSCRIBEPayload(topic, fence))
             val subAck = remoteGeoBroker.receiveWithTimeout(3000)
             return if (subAck is Payload.SUBACKPayload){
                 if (subAck.reasonCode == ReasonCode.GrantedQoS0){
-                    logger.info("GeoBroker's Sub ACK for id:  for '${topic.topic}' in $fence: {}", subAck)
+                    logger.info("GeoBroker's Sub ACK for $id:  for '${topic.topic}' in $fence: {}", subAck)
                     "success"
                 } else {
                     logger.error("Error Subscribing to '${topic.topic}' by $id. Reason: {}.", subAck.reasonCode)
@@ -116,7 +117,68 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             }
         } else {
             logger.warn("already subscribed to the '${topic.topic}'")
-            return  "already exist"
+            return  "already exist" // not a failure
+        }
+    }
+
+    fun unsubscribeFunction(funcName: String) :MutableSet<Topic> {
+        logger.debug("unsubscribeFunction() call. func:'{}'", funcName)
+        var topicsToDelete: MutableSet<Topic> = mutableSetOf()
+        var baseTopic = "functions/$funcName"
+        baseTopic += when (mode) {
+            ClientType.EDGE, ClientType.CLOUD   -> "/call"
+            ClientType.CLIENT -> "/result"
+        }
+        val topic = Topic(baseTopic)
+        val unSubscribe: String? = unsubscribe(topic)
+        if (unSubscribe == "success") { topicsToDelete.add(topic) }
+
+        // unlike subscribeFunction() we won't abort if the first unsubscribe fails
+        if (mode == ClientType.CLIENT) { // Client subscribes to two topics
+            val ackTopic = Topic("functions/$funcName/ack")
+            val ackUnsubscribe = unsubscribe(ackTopic)
+            if (ackUnsubscribe == "success") { topicsToDelete.add(ackTopic) }
+        }
+        if (mode == ClientType.CLOUD) { // Cloud subscribes to two topics
+            val nackTopic = Topic("functions/$funcName/nack")
+            val nackUnsubscribe = unsubscribe(nackTopic)
+            if (nackUnsubscribe == "success") { topicsToDelete.add(nackTopic) }
+        }
+        return if (topicsToDelete.isNotEmpty()) {
+            logger.debug("listeningTopic size before unsubscribing: {}", listeningTopics.size)
+            topicsToDelete.forEach {  obsoleteTopic -> // remove from local registry
+                val lsToDelete = listeningTopics.find { it.topic == obsoleteTopic }
+                listeningTopics.remove(lsToDelete)
+            }
+            logger.debug("listeningTopic size after unsubscribing: {}", listeningTopics.size)
+            logger.debug("ListeningTopics decreased by ${topicsToDelete.size}: {}", topicsToDelete.map { it.topic })
+            topicsToDelete // for error handling purposes
+        } else {
+            logger.debug("ListeningTopics didn't change. Nothing unsubscribed new!")
+            mutableSetOf<Topic>()
+       }
+    }
+
+    // returns three states: "success", null (failure), or "not exist"
+    private fun unsubscribe(topic: Topic): String? {
+        if (isSubscribedTo(topic.topic)) {
+            remoteGeoBroker.send(Payload.UNSUBSCRIBEPayload(topic))
+            val unsubAck = remoteGeoBroker.receiveWithTimeout(3000)
+            if (unsubAck is Payload.UNSUBACKPayload) {
+                if (unsubAck.reasonCode == ReasonCode.Success){
+                    logger.info("GeoBroker's unSub ACK for $id:  topic: '{}'", topic.topic)
+                    return "success"
+                } else {
+                    logger.error("Error unSubscribing from '${topic.topic}' by $id. Reason: {}.", unsubAck.reasonCode)
+                    return null // failure
+                }
+            } else {
+                logger.fatal("Expected an unSubAck Payload! {}", unsubAck)
+                return null // failure
+            }
+        } else {
+            logger.warn("didn't unsubscribe from '${topic.topic}'")
+            return "not exist" // not a failure
         }
     }
     private fun isSubscribedTo(topic: String): Boolean { // NOTE: checks only the topic, not the fence
