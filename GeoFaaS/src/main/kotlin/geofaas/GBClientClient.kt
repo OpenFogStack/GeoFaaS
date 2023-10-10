@@ -19,7 +19,7 @@ class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", 
     fun callFunction(funcName: String, data: String, radiusDegree: Double): FunctionMessage? {
         logger.info("calling '$funcName' function with following param: '$data'")
         val pubFence = Geofence.circle(location, radiusDegree)
-        val subFence = Geofence.circle(location, radiusDegree)
+        val subFence = Geofence.circle(location, radiusDegree) // subFence is better to be as narrow as possible (if the client is not moving, zero)
         // Subscribe for the response
         val subTopics: MutableSet<ListeningTopic>? = subscribeFunction(funcName, subFence)
         if (subTopics != null) { // if success, it is either empty or contains newly subscribed functions
@@ -139,12 +139,12 @@ suspend fun main() {
 //        }
 //    }
     val client1 = GBClientClient(clientLoc["paris1"]!!, true, "localhost", 5560)
-    val res: FunctionMessage? = client1.callFunction("sieve", "", 2.1)
+    val res: FunctionMessage? = client1.callFunction("sieve", "", 0.1)
     if(res != null) println("Result: ${res.data}")
     sleepNoLog(2000, 0)
 
     client1.updateLocation(clientLoc["reims"]!!)
-    val res2: FunctionMessage? = client1.callFunction("sieve", "", 2.1)
+    val res2: FunctionMessage? = client1.callFunction("sieve", "", 0.1)
     if(res2 != null) println("Result: ${res2.data}")
     client1.terminate()
 }
