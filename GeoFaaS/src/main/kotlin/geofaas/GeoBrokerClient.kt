@@ -91,6 +91,13 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             return null // failure
     }
 
+    // returns a map of function name to either call, result, or/and ack/nack
+    fun subscribedFunctionsList(): Map<String, List<String>> {
+        val functionCalls = listeningTopics.map { pair -> pair.topic.topic }//.filter { it.endsWith("/call") }
+        logger.debug("functions that $id already listening to: {}", functionCalls)
+        return functionCalls.map { val partialTopic = it.substringAfter("/").split("/");
+        listOf(partialTopic.first(), partialTopic[1])}.groupBy { it.first() }.mapValues { it.value.map { pair -> pair[1] } }// take name of function and the action between '/', e.g. functions/"f1/call"
+    }
     private fun subscribe(topic: Topic, fence: Geofence): String? {
         if (!isSubscribedTo(topic.topic)) {
             remoteGeoBroker.send(Payload.SUBSCRIBEPayload(topic, fence))
@@ -111,6 +118,9 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             logger.warn("already subscribed to the '${topic.topic}'")
             return  "already exist"
         }
+    }
+    private fun isSubscribedTo(topic: String): Boolean { // NOTE: checks only the topic, not the fence
+        return listeningTopics.map { pair -> pair.topic.topic }.any { it == topic }
     }
 
     fun listenFor(type: String, timeout: Int): FunctionMessage? {
@@ -187,27 +197,6 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         }
     }
 
-    // returns a map of function name to either call, result, or ack/nack
-    fun subscribedFunctionsList(): Map<String, List<String>> {
-        val functionCalls = listeningTopics.map { pair -> pair.topic.topic }//.filter { it.endsWith("/call") }
-        logger.debug("functions that $id already listening to: {}", functionCalls)
-        return functionCalls.map { val partialTopic = it.substringAfter("/").split("/");
-        listOf(partialTopic.first(), partialTopic[1])}.groupBy { it.first() }.mapValues { it.value.map { pair -> pair[1] } }// take name of function and the action between '/', e.g. functions/"f1/call"
-    }
-
-    // follow geoBroker instructions to Disconnect
-    fun terminate() {
-        remoteGeoBroker.send(Payload.DISCONNECTPayload(ReasonCode.NormalDisconnection)) // disconnect
-        remoteGeoBroker.tearDownClient()
-        if (processManager.tearDown(3000)) {
-            logger.info("GBClient Channel shut down properly.")
-        } else {
-            logger.fatal("ProcessManager reported that processes are still running: {}",
-                processManager.incompleteZMQProcesses)
-        }
-//        exitProcess(0) // terminates current process
-    }
-
     protected fun changeBroker(broker: BrokerInfo): Boolean {
         logger.warn("changing the remote broker to $broker...")
         val oldBroker = remoteGeoBroker
@@ -227,9 +216,20 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             return false
         }
     }
-    private fun isSubscribedTo(topic: String): Boolean { // NOTE: checks only the topic, not the fence
-        return listeningTopics.map { pair -> pair.topic.topic }.any { it == topic }
+
+    // follow geoBroker instructions to Disconnect
+    fun terminate() {
+        remoteGeoBroker.send(Payload.DISCONNECTPayload(ReasonCode.NormalDisconnection)) // disconnect
+        remoteGeoBroker.tearDownClient()
+        if (processManager.tearDown(3000)) {
+            logger.info("GBClient Channel shut down properly.")
+        } else {
+            logger.fatal("ProcessManager reported that processes are still running: {}",
+                processManager.incompleteZMQProcesses)
+        }
+//        exitProcess(0) // terminates current process
     }
+
 
     protected fun processConnAckSuccess(connAck: Payload?, broker: BrokerInfo, withTimeout: Boolean) :Boolean{
         if (connAck is Payload.CONNACKPayload && connAck.reasonCode == ReasonCode.Success)
