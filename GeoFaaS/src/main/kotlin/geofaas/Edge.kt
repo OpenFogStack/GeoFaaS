@@ -9,30 +9,31 @@ import geofaas.Model.FunctionAction
 import geofaas.Model.GeoFaaSFunction
 import geofaas.Model.ClientType
 import geofaas.Model.FunctionMessage
+import geofaas.Model.StatusCode
 
 class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaS-Edge1", brokerAreaManager: BrokerAreaManager) {
     private val logger = LogManager.getLogger()
-    private val gbClient = GBClientServer(loc, debug, host, port, id, ClientType.EDGE, brokerAreaManager)
+    private val gbClient = ServerGBClient(loc, debug, host, port, id, ClientType.EDGE, brokerAreaManager)
     private var faasRegistry = mutableListOf<TinyFaasClient>()
     // returns ture if success to Subscribe to all the functions
 
-    suspend fun registerFaaS(tf: TinyFaasClient): Boolean {
+    suspend fun registerFaaS(tf: TinyFaasClient): StatusCode {
         val funcs: Set<GeoFaaSFunction> = tf.functions()
         if (funcs.isNotEmpty()) {
             val registerSuccess = gbClient.registerFunctions(funcs, gbClient.brokerAreaManager.ownBrokerArea.coveredArea)
-            return if (registerSuccess) {
+            return if (registerSuccess == StatusCode.Success) {
                 logger.info("new FaaS's functions have been registered")
                 faasRegistry += tf
                 logger.info("registered a new FaaS with funcs: ${funcs.map { f -> f.name }}")
-                true
+                StatusCode.Success
             } else {
                 logger.fatal("Failed to register FaaS '${tf.host}:${tf.port}'. Reason: Failed to register its functions")
-                false
+                StatusCode.Failure
             }
         } else {
             logger.warn("registered a new FaaS with no serving functions!")
             faasRegistry += tf
-            return true
+            return StatusCode.Success
         }
     }
 
@@ -92,7 +93,7 @@ suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-r
     val tf = TinyFaasClient("localhost", 8000)
 
     val registerSuccess = gf.registerFaaS(tf)
-    if (registerSuccess) {
+    if (registerSuccess == StatusCode.Success) {
         repeat(args[1].toInt()){
             gf.handleNextRequest() //TODO: call in a coroutine? or a separate thread
             println("${it+1} requests processed")

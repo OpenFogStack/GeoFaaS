@@ -5,18 +5,17 @@ import de.hasenburg.geobroker.commons.model.message.Topic
 import de.hasenburg.geobroker.commons.model.spatial.Geofence
 import de.hasenburg.geobroker.commons.model.spatial.Location
 import de.hasenburg.geobroker.commons.model.spatial.toJson
-import de.hasenburg.geobroker.commons.sleepNoLog
 import geofaas.Model.ClientType
 import geofaas.Model.FunctionAction
 import geofaas.Model.FunctionMessage
 import geofaas.Model.TypeCode
 import geofaas.Model.ListeningTopic
 import geofaas.Model.ResponseInfoPatched
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
+import org.apache.logging.log4j.LogManager
 
-class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "ClientGeoFaaS1"): GeoBrokerClient(loc, ClientType.CLIENT, debug, host, port, id) {
-    fun callFunction(funcName: String, data: String, radiusDegree: Double): FunctionMessage? {
+class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "ClientGeoFaaS1"): GeoBrokerClient(loc, ClientType.CLIENT, debug, host, port, id) {
+    private val logger = LogManager.getLogger()
+    fun callFunction(funcName: String, data: String, radiusDegree: Double = 0.1): FunctionMessage? {
         logger.info("calling '$funcName' function with following param: '$data'")
         val pubFence = Geofence.circle(location, radiusDegree)
         val subFence = Geofence.circle(location, radiusDegree) // subFence is better to be as narrow as possible (if the client is not moving, zero)
@@ -26,8 +25,8 @@ class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", 
             // Call the function
             val responseTopicFence = ResponseInfoPatched(id, Topic("functions/$funcName/result"), subFence.toJson())
             val message = gson.toJson(FunctionMessage(funcName, FunctionAction.CALL, data, TypeCode.NORMAL, "GeoFaaS", responseTopicFence))
-            remoteGeoBroker.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call"), pubFence, message))
-            val pubAck = remoteGeoBroker.receiveWithTimeout(3000)
+            gbSimpleClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call"), pubFence, message))
+            val pubAck = gbSimpleClient.receiveWithTimeout(3000)
             val pubSuccess = processPublishAckSuccess(pubAck, funcName, FunctionAction.CALL, true)
             if (!pubSuccess) return null
 
@@ -97,54 +96,4 @@ class GBClientClient(loc: Location, debug: Boolean, host: String = "localhost", 
             logger.error("Expected an RESULT, but received: {}", res)
         return null
     }
-}
-
-
-suspend fun main() {
-    val clientLoc = mapOf("middleButCloserToParis" to Location(50.289339,3.801270),
-        "parisNonOverlap" to Location(48.719961,1.153564),
-        "parisOverlap" to Location(48.858391, 2.327385), // overlaps with broker area but the broker is not inside the fence
-        "paris1" to Location(48.835797,2.244301), // Boulogne Bilancourt area in Paris
-        "reims" to Location(49.246293,4.031982), // East France. inside parisEdge
-        "parisEdge" to Location(48.877366, 2.359708),
-        "saarland" to Location(49.368066,6.976318),
-        "frankfurtEdge" to Location(50.106732,8.663124),
-        "darmstadt" to Location(49.883132,8.646240),
-        "potsdam" to Location(52.400953,13.060169),
-        "franceEast" to Location(47.323931,5.174561),
-        "amsterdam" to Location(52.315195,4.894409),
-        "hamburg" to Location(53.527248,9.986572),
-        "belgium" to Location(50.597186,4.822998))
-
-//    coroutineScope {
-//        launch { val client1 = GBClientClient(clientLoc["potsdam"]!!, true, "141.23.28.207", 5560, "Client1")
-//            val res: FunctionMessage? = client1.callFunction("sieve", "", 2.1)
-//            if(res != null) println("Result: ${res.data}")
-//            sleepNoLog(2000, 0)
-//            client1.terminate()
-//        }
-//        launch {
-//            val client1 = GBClientClient(clientLoc["potsdam"]!!, true, "141.23.28.207", 5560, "Client2")
-//            val res: FunctionMessage? = client1.callFunction("sieve", "", 2.1)
-//            if(res != null) println("Result: ${res.data}")
-//            sleepNoLog(2000, 0)
-//            client1.terminate()
-//        }
-//        launch {
-//            val client1 = GBClientClient(clientLoc["potsdam"]!!, true, "141.23.28.207", 5560, "Client3")
-//            val res: FunctionMessage? = client1.callFunction("sieve", "", 2.1)
-//            if(res != null) println("Result: ${res.data}")
-//            sleepNoLog(2000, 0)
-//            client1.terminate()
-//        }
-//    }
-    val client1 = GBClientClient(clientLoc["paris1"]!!, true, "localhost", 5560)
-    val res: FunctionMessage? = client1.callFunction("sieve", "", 0.1)
-    if(res != null) println("Result: ${res.data}")
-    sleepNoLog(2000, 0)
-
-    client1.updateLocation(clientLoc["reims"]!!)
-    val res2: FunctionMessage? = client1.callFunction("sieve", "", 0.1)
-    if(res2 != null) println("Result: ${res2.data}")
-    client1.terminate()
 }
