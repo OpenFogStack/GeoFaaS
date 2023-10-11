@@ -34,7 +34,12 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         if (!connSuccess) {
             if (connAck is Payload.DISCONNECTPayload) {
                 if(connAck.brokerInfo == null) { // retry with suggested broker
-                    logger.fatal("${connAck.reasonCode}!! No responsible broker found or duplicate client id. $id can't connect to the remote geoBroker '$host:$port'.")
+                    if(connAck.reasonCode == ReasonCode.ProtocolError)
+                        logger.fatal("Duplicate ids! $id can't connect to the remote geoBroker '$host:$port'.")
+                    else if (connAck.reasonCode == ReasonCode.WrongBroker)
+                        logger.fatal("Unexpected '${connAck.reasonCode}' while $id tried to connect to the remote geoBroker '$host:$port'.")
+                    else
+                        logger.fatal("Duplicate ids! $id can't connect to the remote geoBroker '$host:$port'.")
                     throw RuntimeException("Error while connecting to the geoBroker")
                 } else {
                     val newBrokerInfo = connAck.brokerInfo!! // TODO replace with 'changeBroker()' and do the retry
@@ -298,7 +303,11 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         if (connAck is Payload.CONNACKPayload && connAck.reasonCode == ReasonCode.Success)
             return true
         else if (connAck is Payload.DISCONNECTPayload) {
-            logger.fatal("${connAck.reasonCode}! can't connect to the geobroker ${broker.ip}:${broker.port}. another suggested server? ${connAck.brokerInfo}")
+            if (connAck.reasonCode == ReasonCode.ProtocolError)
+                logger.fatal("${connAck.reasonCode}! duplicate client id? can't connect to the geobroker ${broker.ip}:${broker.port}.")
+            else
+                logger.fatal("${connAck.reasonCode}! can't connect to the geobroker ${broker.ip}:${broker.port}. other suggested server? ${connAck.brokerInfo}")
+
             return false
         } else if (connAck == null) {
             if (withTimeout)
@@ -311,12 +320,13 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         }
     }
     protected fun processPublishAckSuccess(pubAck: Payload?, funcName: String, funcAct: FunctionAction, withTimeout: Boolean): Boolean {
-        val logMsg = "GeoBroker's 'Publish ACK' for the '$funcName' $funcAct by $id: {}"
+        val logMsg = "GeoBroker's 'Publish ACK' for the '$funcName' $funcAct by '$id': {}"
         if (pubAck is Payload.PUBACKPayload) {
             val noError = logPublishAck(pubAck, logMsg) // logs the reasonCode
             if (noError) return true
+            else logger.error("${pubAck.reasonCode}! 'Publish ACK' received for '$funcName' $funcAct by '$id'")
         } else if (pubAck == null && withTimeout) {
-            logger.error("Timeout! no 'Publish ACK' received for '$funcName' $funcAct by $id")
+            logger.error("Timeout! no 'Publish ACK' received for '$funcName' $funcAct by '$id'")
         } else {
             logger.error("Unexpected! $logMsg", pubAck)
         }

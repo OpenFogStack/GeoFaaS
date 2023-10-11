@@ -43,6 +43,7 @@ class ServerGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
         gbSimpleClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/nack"), cloudFence, gson.toJson(message)))
         val pubAck = gbSimpleClient.receiveWithTimeout(3000)
         val pubSuccess = processPublishAckSuccess(pubAck, funcName, FunctionAction.NACK, true)
+        if (!pubSuccess) logger.error("failed to offload $funcName call by $clientId. Is $cloudId online?")
     }
 
     fun registerFunctions(functions: Set<GeoFaaSFunction>, fence: Geofence): StatusCode { //FIXME: should update CALL subscriptions in geoBroker when remote FaaS added/removed serving function
