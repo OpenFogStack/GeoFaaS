@@ -1,5 +1,6 @@
 package geofaas
 
+import de.hasenburg.geobroker.commons.sleepNoLog
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
@@ -9,6 +10,7 @@ import io.ktor.client.statement.*
 import kotlin.Error
 import geofaas.Model.GeoFaaSFunction
 import org.apache.logging.log4j.LogManager
+import kotlin.math.log
 
 // https://ktor.io/docs/response.html
 
@@ -23,45 +25,62 @@ class TinyFaasClient (val host: String, val port: Int, private var functionsLoca
      }
 
     suspend fun call(funcName: String, data: String): HttpResponse? {
-        try {
-            val resp = client.get("http://$host:$port/$funcName") //TODO: add data in the call
-            //Fixme handle HttpResponse[http://localhost:8000/sieve, 500 Internal Server Error]
-            return resp
+        return try {
+            val response = client.post("http://$host:$port/$funcName") {
+                url {
+                    parameters.append("data", data)
+                }
+            }
+            respValidator(response)
+            response
         } catch (e: Throwable) {
-            // TODO: print the error somewhere in log or in returning§
-//            return Error("Error when calling", e)
+            //Fixme handle HttpResponse[http://localhost:8000/sieve, 500 Internal Server Error]
+            logger.error("calling '$host:$port/$funcName' failed. {}", e.message)
+            null
         }
-        return null
     }
 
     suspend fun functions() : Set<GeoFaaSFunction> { // NOTE: could cause performance issue later
-        functionsLocal = remoteFunctions() //FIXME: should update (append/remove) CALL subscriptions in geoBroker
+        //TODO: should update (append/remove) CALL subscriptions in geoBroker
+        functionsLocal = remoteFunctions() ?: throw RuntimeException("can't get functions list! is the remote tinyFaaS running?")
         return functionsLocal
     }
     fun isServingFunction(funcName: String): Boolean {
         return funcName in functionsLocal.map { it.name }
     }
 
-    suspend fun remoteFunctions(): Set<GeoFaaSFunction> {
+    suspend fun remoteFunctions(): Set<GeoFaaSFunction>? {
         // TODO: try catch connection refused
-        val resp = client.get("http://$host:8080/list")
-        val body = resp.body<String>()
-        val funcs = body.split("\n").filter { it.isNotBlank() }
-        return funcs.map { name -> GeoFaaSFunction(name) }.toSet()
+        try {
+            val resp = client.get("http://$host:8080/list")
+            val body = resp.body<String>()
+            val funcs = body.split("\n").filter { it.isNotBlank() }
+            return funcs.map { name -> GeoFaaSFunction(name) }.toSet()
+        }
+        catch (e: Throwable) {
+            logger.fatal("Error when requesting the list of functions from '$host:8080'. $e")
+            return null
+        }
     }
 
 
-    private fun respValidator(resp: HttpResponse): Error? { // TODO: to be used instead of builtin "expectSuccess = true"
-        if (resp.status.value in 200..299) {
-            return null
+    private fun respValidator(resp: HttpResponse): Boolean{ // TODO: to be used instead of builtin "expectSuccess = true"
+        val httpCode = resp.status.value
+        if (httpCode !in 200..299) {
+            if (httpCode == 404)
+                logger.error("function is not being served by tinyFaaS '$host:$port'")
+            else
+                logger.error("bad response code from tinyFaaS '$host:$port'! '$httpCode'")
+            return false
         }
-        return Error("bad response code ${resp.status.value}")
+        return true
     }
 }
 
 //suspend fun main() {
 //    val tf = TinyFaasClient("localhost", 8000)
-//    val response = tf.funcList()
-//    val b: String = response.body()
+//    println(tf.remoteFunctions()?: "null!!!")
+//    val response = tf.call("sieve", "888")
+//    val b: String = response?.body() ?: "null!!!"
 //    println(b)
 //}

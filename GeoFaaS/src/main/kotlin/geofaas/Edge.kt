@@ -55,7 +55,7 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
                         gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.responseTopicFence.senderId)
                         logger.info("${gbClient.id}: sent the result '{}' to functions/${newMsg.funcName}/result", responseBody) // wiki: Found 1229 primes under 10000
                     } else { // connection refused?
-                        logger.error("No response from the FaaS with '${selectedFaaS.host}' address for the function call '${newMsg.funcName}'")
+                        logger.error("No response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}'")
                         gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence, newMsg.responseTopicFence.senderId, "GeoFaaS-Cloud")
                     }
                 } else {
