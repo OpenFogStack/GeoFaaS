@@ -11,6 +11,7 @@ import geofaas.Model.FunctionMessage
 import geofaas.Model.TypeCode
 import geofaas.Model.ListeningTopic
 import geofaas.Model.ResponseInfoPatched
+import geofaas.Model.StatusCode
 import org.apache.logging.log4j.LogManager
 
 class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "ClientGeoFaaS1"): GeoBrokerClient(loc, ClientType.CLIENT, debug, host, port, id) {
@@ -26,15 +27,15 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
             val responseTopicFence = ResponseInfoPatched(id, Topic("functions/$funcName/result"), subFence.toJson())
             val message = gson.toJson(FunctionMessage(funcName, FunctionAction.CALL, data, TypeCode.NORMAL, "GeoFaaS", responseTopicFence))
             gbSimpleClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call"), pubFence, message))
-            val pubAck = gbSimpleClient.receiveWithTimeout(3000)
+            val pubAck = gbSimpleClient.receiveWithTimeout(8000)
             val pubSuccess = processPublishAckSuccess(pubAck, funcName, FunctionAction.CALL, true)
-            if (!pubSuccess) return null
+            if (pubSuccess != StatusCode.Success) return null
 
             // Wait for GeoFaaS's response (Ack)
-            var retryCount = 5
+            var retryCount = 3
             var ackSender :String?
             do {
-                ackSender = listenForAck(3500) // blocking
+                ackSender = listenForAck(8500) // blocking
                 if (ackSender == null)
                     logger.info("attempts remained for getting the ack: {}", retryCount - 1)
                 retryCount--
@@ -65,7 +66,10 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
 
     private fun listenForAck(ackTimeout: Int): String? {
         // Wait for GeoFaaS's response
-        val ack: FunctionMessage? = listenFor("ACK", ackTimeout)
+        var ack: FunctionMessage?
+        do {
+            ack = listenForFunction("ACK", ackTimeout)
+        } while (ack != null && ack.receiverId != id) // post-process receiver-id. as in pub/sub you may also need messages with other receiver ids
         if (ack != null) {
             if (ack.funcAction == FunctionAction.ACK) {
                 if(ack.typeCode == TypeCode.PIGGY) logger.warn("Piggybacked Ack not handled! Ignoring it")
@@ -86,7 +90,10 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
         }
     }
     private fun listenForResult(): FunctionMessage? {
-        val res: FunctionMessage? = listenFor("RESULT", 0)
+        var res: FunctionMessage?
+        do {
+            res = listenForFunction("RESULT", 0)
+        } while (res != null && res.receiverId != id)
         if(res?.funcAction == FunctionAction.RESULT) {
             if (res.receiverId == id)
                 return res
