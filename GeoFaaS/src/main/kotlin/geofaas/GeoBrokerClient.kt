@@ -17,18 +17,21 @@ import geofaas.Model.FunctionAction
 import geofaas.Model.StatusCode
 import org.apache.logging.log4j.Level
 import org.apache.logging.log4j.LogManager
+import java.util.*
 
 // Basic Geobroker client for GeoFaaS system
 abstract class GeoBrokerClient(var location: Location, val mode: ClientType, debug: Boolean, host: String = "localhost", port: Int = 5559, val id: String = "GeoFaaSAbstract") {
     private val logger = LogManager.getLogger()
-    private var listeningTopics = mutableSetOf<ListeningTopic>()
     private val processManager = ZMQProcessManager()
+    private var listeningTopics = mutableSetOf<ListeningTopic>()
+    protected val ackQueue : Queue<Payload> = LinkedList<Payload>()
+    protected val pubQueue : Queue<Payload> = LinkedList<Payload>()
     var gbSimpleClient = SimpleClient(host, port, identity = id)
     val gson = Gson()
     init {
         if (debug) { setLogLevel(logger, Level.DEBUG) }
         gbSimpleClient.send(Payload.CONNECTPayload(location)) // connect
-        var connAck = gbSimpleClient.receiveWithTimeout(3000)
+        var connAck = gbSimpleClient.receiveWithTimeout(8000)
 
         val connSuccess = processConnAckSuccess(connAck, BrokerInfo(gbSimpleClient.identity, host, port), true)
         if (!connSuccess) {
@@ -47,7 +50,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                     logger.warn("Changed the remote broker to the suggested: $newBrokerInfo")
                     gbSimpleClient = SimpleClient(newBrokerInfo.ip, newBrokerInfo.port, identity = id)
                     gbSimpleClient.send(Payload.CONNECTPayload(location)) // connect
-                    connAck = gbSimpleClient.receiveWithTimeout(3000)
+                    connAck = gbSimpleClient.receiveWithTimeout(8000)
                     val connSuccess = processConnAckSuccess(connAck, newBrokerInfo, true)
                     if (!connSuccess)
                         throw RuntimeException("Error connecting to the new geoBroker")
@@ -108,7 +111,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
     private fun subscribe(topic: Topic, fence: Geofence): StatusCode {
         if (!isSubscribedTo(topic.topic)) {
             gbSimpleClient.send(Payload.SUBSCRIBEPayload(topic, fence))
-            val subAck = gbSimpleClient.receiveWithTimeout(3000)
+            val subAck = gbSimpleClient.receiveWithTimeout(8000)
             return if (subAck is Payload.SUBACKPayload){
                 if (subAck.reasonCode == ReasonCode.GrantedQoS0){
                     logger.info("$id successfully subscribed to '${topic.topic}' in $fence. details: {}", subAck)
@@ -169,7 +172,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
     private fun unsubscribe(topic: Topic): StatusCode {
         if (isSubscribedTo(topic.topic)) {
             gbSimpleClient.send(Payload.UNSUBSCRIBEPayload(topic))
-            val unsubAck = gbSimpleClient.receiveWithTimeout(3000)
+            val unsubAck = gbSimpleClient.receiveWithTimeout(8000)
             if (unsubAck is Payload.UNSUBACKPayload) {
                 if (unsubAck.reasonCode == ReasonCode.Success){
                     logger.info("GeoBroker's unSub ACK for $id:  topic: '{}'", topic.topic)
@@ -191,40 +194,72 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         return listeningTopics.map { pair -> pair.topic.topic }.any { it == topic }
     }
 
-    fun listenFor(type: String, timeout: Int): FunctionMessage? {
-        // function call
-        logger.info("Listening to the geoBroker server for a '$type'...")
-        val msg: Payload? = when (timeout){
-            0 -> gbSimpleClient.receive() // blocking
-            else -> gbSimpleClient.receiveWithTimeout(timeout)
+    fun listenForFunction(type: String, timeout: Int): FunctionMessage? {
+        // function call/ack/nack/result
+        val msg: Payload?
+        val enqueuedPub = pubQueue.poll()
+        if (enqueuedPub == null) {
+            logger.info("Listening to the geoBroker server for a '$type'...")
+            msg = when (timeout){
+                0 -> gbSimpleClient.receive() // blocking
+                else -> gbSimpleClient.receiveWithTimeout(timeout) // returns null after expiry
+            }
+            if (timeout > 0 && msg == null) {
+                logger.error("Listening timeout (${timeout}ms)!")
+                return null
+            }
+            logger.debug("EVENT from geoBroker: {}", msg)
+        } else {
+            msg = enqueuedPub
+            logger.debug("Pub queue's size is ${pubQueue.size}. dequeued: {}", enqueuedPub)
         }
-        if (timeout > 0 && msg == null) {
-            logger.error("Listening timeout (${timeout}ms)!")
-            return null
-        }
-        logger.debug("EVENT from geoBroker: {}", msg)
+
         if (msg is Payload.PUBLISHPayload) {
 // wiki:    msg.topic    => Topic(topic=functions/f1/call)
 // wiki:    msg.content  => message
 // wiki:    msg.geofence => BUFFER (POINT (0 0), 2)
             val topic = msg.topic.topic.split("/")
             if(topic.first() == "functions") {
-                val message = gson.fromJson(msg.content, FunctionMessage::class.java)
+                val message = gson.fromJson(msg.content, FunctionMessage::class.java) // return FunctionMessage(funcName, FunctionAction.valueOf(funcAction), msg.content, Model.TypeCode.Piggy)
                 return message
-//                return FunctionMessage(funcName, FunctionAction.valueOf(funcAction), msg.content, Model.TypeCode.Piggy)
             } else {
                 logger.error("msg is not related to the functions! {}", msg.topic.topic)
                 return null
             }
-        } else {
-            logger.error("Unexpected geoBroker message (not a PUBLISHPayload): $msg")
+        } else if(msg == null) {
+            logger.error("Expected a PUBLISHPayload, but null received from geoBroker!")
             return null
+        } else {
+            ackQueue.add(msg)
+            logger.warn("Not a PUBLISHPayload! adding it to the 'ackQueue'. dump: {}", msg)
+            return null
+        }
+    }
+    fun listenForPubAckAndProcess(funcAct: FunctionAction, funcName: String, timeout: Int): StatusCode {
+        val enqueuedAck = ackQueue.poll() //FIXME: the ack could also be a Disconnect, SubAck or UnSubAck, or others
+        if (enqueuedAck == null) {
+            if (timeout > 0)
+                logger.debug("PubAck queue is empty. Listening for a PubAck for ${timeout}ms...")
+            else
+                logger.debug("PubAck queue is empty. Listening for a PubAck...")
+            val pubAck = gbSimpleClient.receiveWithTimeout(timeout)
+            val pubStatus = processPublishAckSuccess(pubAck, funcName, funcAct, timeout > 0) // will push to the pubQueue
+            return pubStatus
+        } else {
+            logger.debug("PubAck queue's size is ${ackQueue.size}. dequeued: {}", enqueuedAck)
+            if (enqueuedAck is Payload.PUBACKPayload){
+                val pubStatus = processPublishAckSuccess(enqueuedAck, funcName, funcAct, timeout > 0) // will push to the pubQueue
+                return pubStatus
+            } else {
+                logger.fatal("Expected a PubAck in the ackQueue! Dismissed: {}", enqueuedAck)
+                return StatusCode.Retry
+            }
         }
     }
 
     fun updateLocation(newLoc :Location) :StatusCode{
         gbSimpleClient.send(Payload.PINGREQPayload(newLoc))
-        val pubAck = gbSimpleClient.receiveWithTimeout(3000)
+        val pubAck = gbSimpleClient.receiveWithTimeout(8000)
         logger.debug("ping ack: {}", pubAck) //DISCONNECTPayload(reasonCode=WrongBroker, brokerInfo=BrokerInfo(brokerId=Frankfurt, ip=localhost, port=5559)
         if(pubAck is Payload.DISCONNECTPayload) {
             logger.warn("moved outside of the current broker's area.")
@@ -271,15 +306,16 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         gbSimpleClient = SimpleClient(broker.ip, broker.port, identity = id)
         gbSimpleClient.send(Payload.CONNECTPayload(location)) // connect
 
-        val connAck = gbSimpleClient.receiveWithTimeout(3000)
+        val connAck = gbSimpleClient.receiveWithTimeout(8000)
         val connSuccess = processConnAckSuccess(connAck, broker, true)
 
         if(connSuccess) {
             logger.info("switched the remote broker to: ${broker.brokerId}")
             oldBroker.tearDownClient()
+            logger.info("disconnected from the previous broker")
             return StatusCode.Success
         } else {
-            logger.error("failed to change the remote broker to: $broker")
+            logger.error("failed to change the remote broker to: $broker. Thus, remote geobroker is not changed")
             gbSimpleClient = oldBroker
             return StatusCode.Failure
         }
@@ -319,18 +355,22 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             return false
         }
     }
-    protected fun processPublishAckSuccess(pubAck: Payload?, funcName: String, funcAct: FunctionAction, withTimeout: Boolean): Boolean {
+    protected fun processPublishAckSuccess(pubAck: Payload?, funcName: String, funcAct: FunctionAction, withTimeout: Boolean): StatusCode {
         val logMsg = "GeoBroker's 'Publish ACK' for the '$funcName' $funcAct by '$id': {}"
         if (pubAck is Payload.PUBACKPayload) {
             val noError = logPublishAck(pubAck, logMsg) // logs the reasonCode
-            if (noError) return true
+            if (noError) return StatusCode.Success
             else logger.error("${pubAck.reasonCode}! 'Publish ACK' received for '$funcName' $funcAct by '$id'")
         } else if (pubAck == null && withTimeout) {
             logger.error("Timeout! no 'Publish ACK' received for '$funcName' $funcAct by '$id'")
+        } else if (pubAck is Payload.PUBLISHPayload) {
+            pubQueue.add(pubAck) // to be processed by listenForFunction()
+            logger.warn("Not a PUBACKPayload! adding it to the 'pubQueue'. dump: {}", pubAck)
+            return StatusCode.Retry
         } else {
             logger.error("Unexpected! $logMsg", pubAck)
         }
-        return false
+        return StatusCode.Failure
     }
     protected fun logPublishAck(pubAck: Payload.PUBACKPayload, logMsg: String): Boolean {
         // logMsg: "GeoBroker's 'Publish ACK' for the '$funcName' ACK by $id: {}"

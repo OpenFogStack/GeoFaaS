@@ -8,7 +8,10 @@ object Model {
     enum class FunctionAction { ACK, NACK, CALL, RESULT }
     enum class TypeCode { NORMAL, PIGGY }
 
-    enum class StatusCode { Success, Failure, AlreadyExist, NotExist }
+    enum class StatusCode { Success, Failure, // common
+        AlreadyExist, NotExist,               // for Sub/unSub
+        Retry                                 // for listens with unexpected msg
+    }
 
     data class GeoFaaSFunction (val name: String)
     data class ListeningTopic(val topic: Topic, val fence: Geofence)

@@ -74,7 +74,7 @@ messageProcessors = 2
     - `tmux new -s geofaas`
     - two terminals? `ctrl-b %`
     - `cd geobroker`
-    - ` java -jar GeoBroker-Server.jar config/disgb-berlin.toml`
+    - `java -jar GeoBroker-Server.jar config/disgb-berlin.toml`
 - Run Corresponding FaaS (if any?)
   - tinyFaas function deployment (localfile):
     - `./scripts/upload.sh "test/fns/sieve-of-eratosthenes" "sieve" "nodejs" 1`
@@ -100,7 +100,7 @@ messageProcessors = 2
 GeoFaaS is independent of the FaaS module. tinyFaaS could be replaced by any FaaS. That's why only DisGB (geoBroker) config mentioned below:  
 - DiSGB mode: `disgb_subscriberMatching`. i.e. RPs are near the subscribers    
 - GeoFaaS's subscription geofence = broker area  
-- Client's subscription geofence = a circle around itself (with a `2.1` radius)  
+- Client's subscription geofence = a circle around itself (with a `0.1` radius)  
 - The `/result` from any GeoFaaS server is not forwarded to potential brokers, as the client is already subscribed to responsible (same) broker
 - The `/call` from any entity is only forwarded to potential brokers if no local subscriber exists  
 - The GeoFaaS-Cloud's subscription geofence is the world, therefore it is responsible for requests. Hence, its Location is 0.0:0.0
@@ -108,7 +108,8 @@ GeoFaaS is independent of the FaaS module. tinyFaaS could be replaced by any Faa
 - GeFaaS-Cloud subscribes to both `/call` (for clients that are far from any Edge server) and `/nack` (for offloading)
 - GeoFaaS-Edge subscribes only to `/call`s
 - ClientGeoFaaS subscribes to `/result` and `/ack` around itself when calls a function
+- message TypeCode (NORMAL/PIGGY) is for further uses
 - GeoFaaS Message contains a Topic and Fence pair, declaring what topic and fence is the publisher is listening for response (empty topic if not listening for any response)
-- timeout for initial connection is 3 seconds. Client's listening timeout for the Ack after calling a function is 3.5 seconds.
-- in geoBroker to make the client's location updated, should publish a PingReqPayload  
-
+- timeout for initial connection is 8 seconds. Client's listening timeout for the Ack after calling a function is 8.5 seconds.
+- in geoBroker to make the client's location updated, should publish a PingReqPayload
+- GeoFaaS may processes and enqueues all the geographically (and topic) relevant messages. later can use the receiver id to process/dismiss
