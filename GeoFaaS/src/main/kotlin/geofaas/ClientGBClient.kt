@@ -27,7 +27,7 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
             val responseTopicFence = ResponseInfoPatched(id, Topic("functions/$funcName/result"), subFence.toJson())
             val message = gson.toJson(FunctionMessage(funcName, FunctionAction.CALL, data, TypeCode.NORMAL, "GeoFaaS", responseTopicFence))
             gbSimpleClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call"), pubFence, message))
-            val pubAck = gbSimpleClient.receiveWithTimeout(8000)
+            val pubAck = gbSimpleClient.receiveWithTimeout(8000) // TODO: replace with 'listenForPubAckAndProcess()'
             val pubSuccess = processPublishAckSuccess(pubAck, funcName, FunctionAction.CALL, true)
             if (pubSuccess != StatusCode.Success) return null
 
@@ -73,13 +73,8 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
         if (ack != null) {
             if (ack.funcAction == FunctionAction.ACK) {
                 if(ack.typeCode == TypeCode.PIGGY) logger.warn("Piggybacked Ack not handled! Ignoring it")
-                return if (ack.receiverId == id){
-                    logger.info("the Ack received from '{}': {}", ack.responseTopicFence.senderId, ack)
-                    ack.responseTopicFence.senderId
-                } else {
-                    logger.debug("the received Ack is not for me. Retrying... {}", ack)
-                    null
-                }
+                logger.info("the Ack received from '{}': {}", ack.responseTopicFence.senderId, ack)
+                return ack.responseTopicFence.senderId
             } else {
                 logger.error("expected an Ack but received '{}'", ack.funcAction)
                 return null

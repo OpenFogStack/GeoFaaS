@@ -38,7 +38,7 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
     }
 
     suspend fun handleNextRequest() {
-        val newMsg :FunctionMessage? = gbClient.listenFor("CALL", 0) // blocking
+        val newMsg :FunctionMessage? = gbClient.listenForFunction("CALL", 0) // blocking
         if (newMsg != null) {
             val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
             if (newMsg.funcAction == FunctionAction.CALL) {
@@ -49,7 +49,7 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
                     val response = selectedFaaS.call(newMsg.funcName, newMsg.data)
                     logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
 
-//                    logger.warn("Offloading all requests! for debug purposes!")
+//                    logger.warn("Offloading all requests! for test purposes!")
                     if (response != null) {
                         val responseBody: String = response.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
                         gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.responseTopicFence.senderId)

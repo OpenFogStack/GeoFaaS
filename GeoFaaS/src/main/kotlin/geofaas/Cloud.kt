@@ -38,7 +38,7 @@ class Cloud(loc: Location, debug: Boolean, host: String = "localhost", port: Int
     }
 
     suspend fun handleNextRequest() {
-        val newMsg :FunctionMessage? = gbClient.listenFor("CALL or NACK", 0) // blocking
+        val newMsg :FunctionMessage? = gbClient.listenForFunction("CALL or NACK", 0) // blocking
         if (newMsg != null) {
             val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
             if (newMsg.funcAction == FunctionAction.NACK) {
@@ -54,7 +54,7 @@ class Cloud(loc: Location, debug: Boolean, host: String = "localhost", port: Int
                         gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.responseTopicFence.senderId)
                         logger.info("${gbClient.id}: sent the result '{}' to functions/${newMsg.funcName}/result", responseBody) // wiki: Found 1229 primes under 10000
                     } else { // connection refused?
-                        logger.error("No response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address for the function call '${newMsg.funcName}'")
+                        logger.error("No response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}'")
 //                        gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence)
                     }
                 } else {
@@ -74,7 +74,7 @@ class Cloud(loc: Location, debug: Boolean, host: String = "localhost", port: Int
                         gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.responseTopicFence.senderId)
                         logger.info("${gbClient.id}: sent the result '{}' to functions/${newMsg.funcName}/result", responseBody) // wiki: Found 1229 primes under 10000
                     } else { // connection refused?
-                        logger.error("No response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address for the function call '${newMsg.funcName}'")
+                        logger.error("No response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}'")
                         logger.error("The Client will NOT receive any response! This is end of the line of offloading")
 //                        gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence)
                     }
