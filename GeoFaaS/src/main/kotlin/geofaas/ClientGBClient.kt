@@ -70,6 +70,7 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
         do {
             ack = listenForFunction("ACK", ackTimeout)
         } while (ack != null && ack.receiverId != id) // post-process receiver-id. as in pub/sub you may also need messages with other receiver ids
+
         if (ack != null) {
             if (ack.funcAction == FunctionAction.ACK) {
                 if(ack.typeCode == TypeCode.PIGGY) logger.warn("Piggybacked Ack not handled! Ignoring it")
@@ -89,13 +90,9 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
         do {
             res = listenForFunction("RESULT", 0)
         } while (res != null && res.receiverId != id)
-        if(res?.funcAction == FunctionAction.RESULT) {
-            if (res.receiverId == id)
-                return res
-            else
-                logger.warn("the received Result is not for me. Retrying... {}", res)
-        } else
-            logger.error("Expected an RESULT, but received: {}", res)
+
+        if(res?.funcAction == FunctionAction.RESULT) return res
+        else logger.error("Expected an RESULT, but received: {}", res)
         return null
     }
 }
