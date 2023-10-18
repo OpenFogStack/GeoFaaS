@@ -10,7 +10,8 @@ object Model {
 
     enum class StatusCode { Success, Failure, // common
         AlreadyExist, NotExist,               // for Sub/unSub
-        Retry                                 // for listens with unexpected msg
+        Retry,                                // for listens with unexpected msg
+        WrongBroker                           // for handling the case another responsible broker exist
     }
 
     data class GeoFaaSFunction (val name: String)
