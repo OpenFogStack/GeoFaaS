@@ -23,7 +23,7 @@ import java.util.*
 abstract class GeoBrokerClient(var location: Location, val mode: ClientType, debug: Boolean, host: String = "localhost", port: Int = 5559, val id: String = "GeoFaaSAbstract") {
     private val logger = LogManager.getLogger()
     private val processManager = ZMQProcessManager()
-    private var listeningTopics = mutableSetOf<ListeningTopic>()
+    var listeningTopics = mutableSetOf<ListeningTopic>()
     protected val ackQueue : Queue<Payload> = LinkedList<Payload>()
     protected val pubQueue : Queue<Payload> = LinkedList<Payload>()
     var gbSimpleClient = SimpleClient(host, port, identity = id)
@@ -394,7 +394,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             ReasonCode.Success -> logger.info(logMsg, pubAck)
             ReasonCode.NoMatchingSubscribersButForwarded -> logger.warn(logMsg, pubAck.reasonCode)
             ReasonCode.NoMatchingSubscribers -> {
-                logger.error("$logMsg. Terminating...", pubAck.reasonCode)
+                logger.error("$logMsg. Terminating..?", pubAck.reasonCode)
                 return false
             }
             ReasonCode.NotConnectedOrNoLocation -> {

@@ -40,17 +40,13 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
                     val changeStatus = changeBroker(pubAck.brokerInfo!!) // processPublishAckSuccess() returns WrongBroker only if there is a brokerInfo
                     if (changeStatus == StatusCode.Success) {
                         // TODO move all the subscriptions to the new broker? isn't needed now
-                        val newSubscribeStatus = subscribe(Topic("functions/$funcName/result"), subFence)
+                        val resultTopic = Topic("functions/$funcName/result")
+                        val newSubscribeStatus = subscribe(resultTopic, subFence)
                         if(newSubscribeStatus == StatusCode.Failure)
-                            throw RuntimeException("Failed to subscribe to the functions/$funcName/result" )
-                        var functionMessagesCounter = 0
-                        while (res == null){
-                            res = listenForResult()
-                            functionMessagesCounter++
-                            if(res == null)
-                                logger.debug("not a Result yet. {} Message(s) processed", functionMessagesCounter)
-                        }
-                        logger.info("{} 'Function Message(s)' processed when listening for the result", functionMessagesCounter)
+                            throw RuntimeException("Failed to subscribe to '$resultTopic'" )
+                        else // either Success or AlreadyExist
+                             listeningTopics.add(ListeningTopic(resultTopic, subFence))
+                        res = listenForResult()
                     } else
                         throw RuntimeException("Failed to switch the broker. StatusCode: $changeStatus" )
                 }
@@ -68,14 +64,7 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
 
                 // wait for the result from the GeoFaaS
                 if (ackSender != null){
-                    var functionMessagesCounter = 0
-                    while (res == null){
-                        res = listenForResult()
-                        functionMessagesCounter++
-                        if(res == null)
-                            logger.debug("not a Result yet. {} Message(s) processed", functionMessagesCounter)
-                    }
-                    logger.info("{} 'Function Message(s)' processed when listening for the result", functionMessagesCounter)
+                    res = listenForResult()
                 }
             }
         }
@@ -113,11 +102,14 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
     }
     private fun listenForResult(): FunctionMessage? {
         var res: FunctionMessage?
+        var resultCounter = 0
         do {
             res = listenForFunction("RESULT", 0)
-        } while (res != null && res.receiverId != id)
+            resultCounter++
+        } while (res == null || res.receiverId != id)
+        logger.info("{} Message(s) processed when listening for the result", resultCounter)
 
-        if(res?.funcAction == FunctionAction.RESULT) return res
+        if(res.funcAction == FunctionAction.RESULT) return res
         else logger.error("Expected an RESULT, but received: {}", res)
         return null
     }
