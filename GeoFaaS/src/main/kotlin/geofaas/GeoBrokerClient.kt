@@ -110,7 +110,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         listOf(partialTopic.first(), partialTopic[1])}.groupBy { it.first() }.mapValues { it.value.map { pair -> pair[1] } }// take name of function and the action between '/', e.g. functions/"f1/call"
     }
     // returns three states: "success", null (failure), or "already exist"
-    private fun subscribe(topic: Topic, fence: Geofence): StatusCode {
+    fun subscribe(topic: Topic, fence: Geofence): StatusCode {
         if (!isSubscribedTo(topic.topic)) {
             gbSimpleClient.send(Payload.SUBSCRIBEPayload(topic, fence))
             val subAck = gbSimpleClient.receiveWithTimeout(8000)
@@ -252,7 +252,14 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             if (enqueuedAck is Payload.PUBACKPayload){
                 val pubStatus = processPublishAckSuccess(enqueuedAck, funcName, funcAct, timeout > 0) // will push to the pubQueue
                 return pubStatus
-            } else {
+            }
+            // TODO
+//            else if (enqueuedAck is Payload.DISCONNECTPayload && enqueuedAck.reasonCode == ReasonCode.WrongBroker){
+//                // disconnect payload when publishing to a wrong broker
+//                //// change the broker
+//                //// move subscriptions to the new broker
+//            }
+            else {
                 logger.fatal("Expected a PubAck in the ackQueue! Dismissed: {}", enqueuedAck)
                 return StatusCode.Retry
             }
@@ -312,7 +319,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         val connStatus = processConnAckSuccess(connAck, broker, true)
 
         if(connStatus == StatusCode.Success) {
-            logger.info("switched the remote broker to: ${broker.brokerId}")
+            logger.info("connected to the {} broker", broker.brokerId)
             oldBroker.tearDownClient()
             logger.info("disconnected from the previous broker")
             return StatusCode.Success
@@ -367,7 +374,9 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             val noError = logPublishAck(pubAck, logMsg) // logs the reasonCode
             if (noError) return StatusCode.Success
             else logger.error("${pubAck.reasonCode}! 'Publish ACK' received for '$funcName' $funcAct by '$id'")
-        } else if (pubAck == null && withTimeout) {
+        } else if(pubAck is Payload.DISCONNECTPayload && pubAck.brokerInfo != null)
+            return StatusCode.WrongBroker // disconnect payload when publishing to a wrong broker
+          else if (pubAck == null && withTimeout) {
             logger.error("Timeout! no 'Publish ACK' received for '$funcName' $funcAct by '$id'")
         } else if (pubAck is Payload.PUBLISHPayload) {
             pubQueue.add(pubAck) // to be processed by listenForFunction()

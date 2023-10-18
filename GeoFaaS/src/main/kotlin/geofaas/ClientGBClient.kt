@@ -22,46 +22,72 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
         val subFence = Geofence.circle(location, radiusDegree) // subFence is better to be as narrow as possible (if the client is not moving, zero)
         // Subscribe for the response
         val subTopics: MutableSet<ListeningTopic>? = subscribeFunction(funcName, subFence)
-        if (subTopics != null) { // if success, it is either empty or contains newly subscribed functions
-            // Call the function
-            val responseTopicFence = ResponseInfoPatched(id, Topic("functions/$funcName/result"), subFence.toJson())
-            val message = gson.toJson(FunctionMessage(funcName, FunctionAction.CALL, data, TypeCode.NORMAL, "GeoFaaS", responseTopicFence))
-            gbSimpleClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call"), pubFence, message))
-            val pubAck = gbSimpleClient.receiveWithTimeout(8000) // TODO: replace with 'listenForPubAckAndProcess()'
-            val pubSuccess = processPublishAckSuccess(pubAck, funcName, FunctionAction.CALL, true)
-            if (pubSuccess != StatusCode.Success) return null
+        if (subTopics == null) // if success, it is either empty or contains newly subscribed functions
+            logger.warn("Failed to subscribe to /result and /ack. Could be a wrong broker, continuing...")
 
-            // Wait for GeoFaaS's response (Ack)
-            var retryCount = 3
-            var ackSender :String?
-            do {
-                ackSender = listenForAck(8500) // blocking
-                if (ackSender == null)
-                    logger.info("attempts remained for getting the ack: {}", retryCount - 1)
-                retryCount--
-            } while (ackSender == null && retryCount > 0) // retry
+        // Call the function
+        val responseTopicFence = ResponseInfoPatched(id, Topic("functions/$funcName/result"), subFence.toJson())
+        val message = gson.toJson(FunctionMessage(funcName, FunctionAction.CALL, data, TypeCode.NORMAL, "GeoFaaS", responseTopicFence))
+        gbSimpleClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call"), pubFence, message))
+        val pubAck = gbSimpleClient.receiveWithTimeout(8000) // TODO: replace with 'listenForPubAckAndProcess()'
+        val pubStatus = processPublishAckSuccess(pubAck, funcName, FunctionAction.CALL, true)
+        if (pubStatus != StatusCode.Success && pubStatus != StatusCode.WrongBroker) return null
 
-            var res: FunctionMessage? = null
-            // wait for the result from the GeoFaaS
-            if (ackSender != null){
-                var resultsCounter = 0
-                while (res == null){
-                    res = listenForResult()
-                    resultsCounter++
-                    if(res == null)
-                        logger.debug("not a Result yet. {} Message(s) processed", resultsCounter)
+        var res: FunctionMessage? = null
+        when (pubStatus) {
+            StatusCode.WrongBroker -> { // published to a wrong broker
+                if(pubAck is Payload.DISCONNECTPayload) { // smart cast not available
+                    val changeStatus = changeBroker(pubAck.brokerInfo!!) // processPublishAckSuccess() returns WrongBroker only if there is a brokerInfo
+                    if (changeStatus == StatusCode.Success) {
+                        // TODO move all the subscriptions to the new broker? isn't needed now
+                        val newSubscribeStatus = subscribe(Topic("functions/$funcName/result"), subFence)
+                        if(newSubscribeStatus == StatusCode.Failure)
+                            throw RuntimeException("Failed to subscribe to the functions/$funcName/result" )
+                        var functionMessagesCounter = 0
+                        while (res == null){
+                            res = listenForResult()
+                            functionMessagesCounter++
+                            if(res == null)
+                                logger.debug("not a Result yet. {} Message(s) processed", functionMessagesCounter)
+                        }
+                        logger.info("{} 'Function Message(s)' processed when listening for the result", functionMessagesCounter)
+                    } else
+                        throw RuntimeException("Failed to switch the broker. StatusCode: $changeStatus" )
                 }
-                logger.info("{} Message(s) processed when listening for the result", resultsCounter)
             }
-            val unSubscribedTopics = unsubscribeFunction(funcName)
-            if (unSubscribedTopics.size > 0)
-                logger.info("cleaned subscriptions for '$funcName' call")
-            else
-                logger.error("problem with cleaning subscriptions after calling '$funcName'")
-            return res
+            else -> {
+                // Wait for GeoFaaS's response (Ack)
+                var retryCount = 3
+                var ackSender :String?
+                do {
+                    ackSender = listenForAck(8500) // blocking
+                    if (ackSender == null)
+                        logger.info("attempts remained for getting the ack: {}", retryCount - 1)
+                    retryCount--
+                } while (ackSender == null && retryCount > 0) // retry
+
+                // wait for the result from the GeoFaaS
+                if (ackSender != null){
+                    var functionMessagesCounter = 0
+                    while (res == null){
+                        res = listenForResult()
+                        functionMessagesCounter++
+                        if(res == null)
+                            logger.debug("not a Result yet. {} Message(s) processed", functionMessagesCounter)
+                    }
+                    logger.info("{} 'Function Message(s)' processed when listening for the result", functionMessagesCounter)
+                }
+            }
         }
-        logger.error("Call function failed! Failed to subscribe to /result and /ack")
-        return null
+
+        val unSubscribedTopics = unsubscribeFunction(funcName)
+        if (unSubscribedTopics.size > 0)
+            logger.info("cleaned subscriptions for '$funcName' call (${unSubscribedTopics.size} in total)")
+        else
+            logger.error("problem with cleaning subscriptions after calling '$funcName'")
+        return res
+//        logger.error("Call function failed! Failed to subscribe to /result and /ack")
+//        return null
     }
 
     private fun listenForAck(ackTimeout: Int): String? {
