@@ -13,6 +13,8 @@ import kotlinx.serialization.json.Json
 import org.apache.logging.log4j.LogManager
 import org.zeromq.ZMQ.Socket
 import org.zeromq.ZMsg
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 
 private val logger = LogManager.getLogger()
 
@@ -113,7 +115,19 @@ class DisGBAtSubscriberMatchingLogic(private val clientDirectory: ClientDirector
 
         if (publisherLocation == null) { // null if client is not connected
             logger.debug("Client {} is not connected or has not provided a location", clientIdentifier)
-            reasonCode = ReasonCode.NotConnectedOrNoLocation
+
+            // find the publisher's location and the responsible broker
+            val approximatePublisherLocation = payload.geofence.center
+            //1: Sends a Disconnect Payload with the correct broker to the publisher
+            if (weAreResponsible(clientIdentifier, approximatePublisherLocation, clients))
+                reasonCode = ReasonCode.NotConnectedOrNoLocation // if the responsible broker is this broker, do the default behavior
+            else { // we are not responsible, client has been notified
+                val repBroker = brokerAreaManager.getOtherBrokerContainingLocation(approximatePublisherLocation)!!
+                logger.warn("Forwarded the Publish to the responsible broker (${repBroker.brokerId})")
+                //2: Forward the Call (Pub) to the correct broker, but with a delay
+                BrokerForwardPublishPayload(payload, approximatePublisherLocation).toZMsg(repBroker.brokerId).send(brokers)
+                return // skip the normal behavior. avoid sending 2 acks to the publisher (Disconnect instead of PUBACK)
+            }
         } else {
 
             //1: local subscribers
