@@ -33,8 +33,8 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         gbSimpleClient.send(Payload.CONNECTPayload(location)) // connect
         var connAck = gbSimpleClient.receiveWithTimeout(8000)
 
-        val connSuccess = processConnAckSuccess(connAck, BrokerInfo(gbSimpleClient.identity, host, port), true)
-        if (connSuccess == StatusCode.Failure) {
+        val connStatus = processConnAckSuccess(connAck, BrokerInfo(gbSimpleClient.identity, host, port), true)
+        if (connStatus == StatusCode.Failure) {
             if (connAck is Payload.DISCONNECTPayload) {
                 if(connAck.brokerInfo == null) { // retry with suggested broker
                     if(connAck.reasonCode == ReasonCode.ProtocolError)
@@ -45,22 +45,23 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                         logger.fatal("Duplicate ids! $id can't connect to the remote geoBroker '$host:$port'.")
                     throw RuntimeException("Error while connecting to the geoBroker")
                 }
-//                else {
-//                    val newBrokerInfo = connAck.brokerInfo!! // TODO replace with 'changeBroker()' and do the retry
-////                    val changeIsSuccess = changeBroker(newBrokerInfo)
-//                    logger.warn("Changed the remote broker to the suggested: $newBrokerInfo")
-//                    gbSimpleClient = SimpleClient(newBrokerInfo.ip, newBrokerInfo.port, identity = id)
-//                    gbSimpleClient.send(Payload.CONNECTPayload(location)) // connect
-//                    connAck = gbSimpleClient.receiveWithTimeout(8000)
-//                    val connSuccess = processConnAckSuccess(connAck, newBrokerInfo, true)
-//                    if (!connSuccess)
-//                        throw RuntimeException("Error connecting to the new geoBroker")
-//                }
             } else if (connAck == null) {
                 throw RuntimeException("Timeout! can't connect to geobroker $host:$port. Check the Address and try again")
             } else {
                 logger.fatal("Unexpected 'Conn ACK'! Received geoBroker's answer: {}", connAck)
                 throw RuntimeException("Error while connecting to the geoBroker")
+            }
+        } else if (connStatus == StatusCode.WrongBroker && id.startsWith("GeoFaaS-")){
+            if (connAck is Payload.DISCONNECTPayload) { // because smart cast doesn't happen here
+                val newBrokerInfo = connAck.brokerInfo!! // TODO replace with 'changeBroker()' and do the retry
+//            val changeIsSuccess = changeBroker(newBrokerInfo)
+                logger.warn("Changed the remote broker to the suggested: $newBrokerInfo")
+                gbSimpleClient = SimpleClient(newBrokerInfo.ip, newBrokerInfo.port, identity = id)
+                gbSimpleClient.send(Payload.CONNECTPayload(location)) // connect
+                connAck = gbSimpleClient.receiveWithTimeout(8000)
+                val connSuccess = processConnAckSuccess(connAck, newBrokerInfo, true)
+                if (connSuccess != StatusCode.Success)
+                    throw RuntimeException("Error connecting to the new geoBroker")
             }
         }
     }
