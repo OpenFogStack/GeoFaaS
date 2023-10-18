@@ -34,27 +34,28 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         var connAck = gbSimpleClient.receiveWithTimeout(8000)
 
         val connSuccess = processConnAckSuccess(connAck, BrokerInfo(gbSimpleClient.identity, host, port), true)
-        if (!connSuccess) {
+        if (connSuccess == StatusCode.Failure) {
             if (connAck is Payload.DISCONNECTPayload) {
                 if(connAck.brokerInfo == null) { // retry with suggested broker
                     if(connAck.reasonCode == ReasonCode.ProtocolError)
                         logger.fatal("Duplicate ids! $id can't connect to the remote geoBroker '$host:$port'.")
-                    else if (connAck.reasonCode == ReasonCode.WrongBroker)
-                        logger.fatal("Unexpected '${connAck.reasonCode}' while $id tried to connect to the remote geoBroker '$host:$port'.")
+                    else if (connAck.reasonCode == ReasonCode.WrongBroker) // the connAck.Broker info is null
+                        logger.fatal("No responsible broker found! while $id tried to connect to the remote geoBroker '$host:$port'.")
                     else
                         logger.fatal("Duplicate ids! $id can't connect to the remote geoBroker '$host:$port'.")
                     throw RuntimeException("Error while connecting to the geoBroker")
-                } else {
-                    val newBrokerInfo = connAck.brokerInfo!! // TODO replace with 'changeBroker()' and do the retry
-//                    val changeIsSuccess = changeBroker(newBrokerInfo)
-                    logger.warn("Changed the remote broker to the suggested: $newBrokerInfo")
-                    gbSimpleClient = SimpleClient(newBrokerInfo.ip, newBrokerInfo.port, identity = id)
-                    gbSimpleClient.send(Payload.CONNECTPayload(location)) // connect
-                    connAck = gbSimpleClient.receiveWithTimeout(8000)
-                    val connSuccess = processConnAckSuccess(connAck, newBrokerInfo, true)
-                    if (!connSuccess)
-                        throw RuntimeException("Error connecting to the new geoBroker")
                 }
+//                else {
+//                    val newBrokerInfo = connAck.brokerInfo!! // TODO replace with 'changeBroker()' and do the retry
+////                    val changeIsSuccess = changeBroker(newBrokerInfo)
+//                    logger.warn("Changed the remote broker to the suggested: $newBrokerInfo")
+//                    gbSimpleClient = SimpleClient(newBrokerInfo.ip, newBrokerInfo.port, identity = id)
+//                    gbSimpleClient.send(Payload.CONNECTPayload(location)) // connect
+//                    connAck = gbSimpleClient.receiveWithTimeout(8000)
+//                    val connSuccess = processConnAckSuccess(connAck, newBrokerInfo, true)
+//                    if (!connSuccess)
+//                        throw RuntimeException("Error connecting to the new geoBroker")
+//                }
             } else if (connAck == null) {
                 throw RuntimeException("Timeout! can't connect to geobroker $host:$port. Check the Address and try again")
             } else {
@@ -307,14 +308,14 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         gbSimpleClient.send(Payload.CONNECTPayload(location)) // connect
 
         val connAck = gbSimpleClient.receiveWithTimeout(8000)
-        val connSuccess = processConnAckSuccess(connAck, broker, true)
+        val connStatus = processConnAckSuccess(connAck, broker, true)
 
-        if(connSuccess) {
+        if(connStatus == StatusCode.Success) {
             logger.info("switched the remote broker to: ${broker.brokerId}")
             oldBroker.tearDownClient()
             logger.info("disconnected from the previous broker")
             return StatusCode.Success
-        } else {
+        } else { // TODO handle 'StatusCode.WrongBroker', and reconnect to the correct broker
             logger.error("failed to change the remote broker to: $broker. Thus, remote geobroker is not changed")
             gbSimpleClient = oldBroker
             return StatusCode.Failure
@@ -335,16 +336,20 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
     }
 
 
-    protected fun processConnAckSuccess(connAck: Payload?, broker: BrokerInfo, withTimeout: Boolean) :Boolean{
+    protected fun processConnAckSuccess(connAck: Payload?, broker: BrokerInfo, withTimeout: Boolean) :StatusCode {
         if (connAck is Payload.CONNACKPayload && connAck.reasonCode == ReasonCode.Success)
-            return true
+            return StatusCode.Success
         else if (connAck is Payload.DISCONNECTPayload) {
             if (connAck.reasonCode == ReasonCode.ProtocolError)
                 logger.fatal("${connAck.reasonCode}! duplicate client id? can't connect to the geobroker ${broker.ip}:${broker.port}.")
+            else if(connAck.reasonCode == ReasonCode.WrongBroker && connAck.brokerInfo != null) {
+                logger.warn("Wrong Broker! Responsible broker is: {}", connAck.brokerInfo)
+                return StatusCode.WrongBroker
+            }
             else
                 logger.fatal("${connAck.reasonCode}! can't connect to the geobroker ${broker.ip}:${broker.port}. other suggested server? ${connAck.brokerInfo}")
 
-            return false
+            return StatusCode.Failure
         } else if (connAck == null) {
             if (withTimeout)
                 throw RuntimeException("Timeout! can't connect to the geobroker ${broker.ip}:${broker.port}. Check the Address and try again")
@@ -352,7 +357,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                 throw RuntimeException("Empty Response! can't connect to the geobroker ${broker.ip}:${broker.port}. Check the Address and try again")
         } else {
             logger.fatal("Unexpected 'Conn ACK'! Received geoBroker's answer: {}", connAck)
-            return false
+            return StatusCode.Failure
         }
     }
     protected fun processPublishAckSuccess(pubAck: Payload?, funcName: String, funcAct: FunctionAction, withTimeout: Boolean): StatusCode {
