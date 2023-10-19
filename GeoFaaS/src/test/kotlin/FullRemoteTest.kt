@@ -1,8 +1,12 @@
 
 import de.hasenburg.geobroker.commons.model.spatial.Location
+import de.hasenburg.geobroker.commons.sleepNoLog
+import geofaas.Client
 import geofaas.ClientGBClient
 import geofaas.Model.FunctionMessage
+import geofaas.brokerAddresses
 import org.apache.logging.log4j.LogManager
+import org.junit.After
 import org.junit.Test
 import org.junit.Assert.*
 
@@ -28,17 +32,25 @@ class FullRemoteTest {
         "hamburg" to Location(53.527248,9.986572),
         "belgium" to Location(50.597186,4.822998)
     )
+    private val locParisToPotsdom = listOf(Location(48.922499,2.570801),
+        Location(49.188884,3.955078), // paris
+//    Location(50.520412,4.702148), // Reims
+        Location(50.722547,7.097168), // Belgium
+        Location(51.371780,9.624023), // Bonn
+        Location(53.199452,10.678711), //Hamburg. out of range
+        Location(52.308479,13.073730) // potsdam
+    )
 
 //    @Before
 //    fun setUp() {
 //        logger.info("Running test setUp")
 //    }
 //
-//    @After
-//    fun terminate(){
-//        logger.info("Running test terminate.")
-//        client1.terminate()
-//    }
+    @After
+    fun terminate(){
+        logger.info("Running test terminate.")
+        client1.terminate()
+    }
 
     @Test
     fun berlinOffloadsToCloud() { // assumes Berlin offloads any request
@@ -76,11 +88,24 @@ class FullRemoteTest {
     fun amsterdamClientRedirectsToCloudBrokerAndGetsResponse() {
         gbhost = brokerAddress["Frankfurt"]!!
         client1 = ClientGBClient(clientLoc["amsterdam"]!!, true, gbhost, gbPort, "ClientGeoFaaSTest")
-        assertNotEquals(gbhost, client1.gbSimpleClient.ip) // client should switch to the other broker
-        assertEquals(brokerAddress["Cloud"]!!, client1.gbSimpleClient.ip)
+//        assertNotEquals(gbhost, client1.gbSimpleClient.ip) // client should switch to the other broker. UPDATE: functionality changed. will switch after the call
+//        assertEquals(brokerAddress["Cloud"]!!, client1.gbSimpleClient.ip)
         val res: FunctionMessage? = client1.callFunction("sieve", "", 2.1)
         assertNotNull(res)
         assertEquals("Found 1229 primes under 10000", res?.data)
+        client1.terminate()
+    }
+
+    @Test
+    fun clientMovesAndCallsGetsResult() {
+        client1 = ClientGBClient(locParisToPotsdom.first(), false, brokerAddresses["Paris"]!!, 5560, "ClientGeoFaaSTest")
+        locParisToPotsdom.forEach { loc ->
+            client1.updateLocation(loc)
+            val res: FunctionMessage? = client1.callFunction("sieve", "")
+            if(res != null) println("Result: ${res.data}")
+            assertNotNull(res)
+            assertEquals("Found 1229 primes under 10000", res?.data)
+        }
         client1.terminate()
     }
 
