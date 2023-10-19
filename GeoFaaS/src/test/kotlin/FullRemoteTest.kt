@@ -3,6 +3,7 @@ import de.hasenburg.geobroker.commons.model.spatial.Location
 import de.hasenburg.geobroker.commons.sleepNoLog
 import geofaas.Client
 import geofaas.ClientGBClient
+import geofaas.Model
 import geofaas.Model.FunctionMessage
 import geofaas.brokerAddresses
 import org.apache.logging.log4j.LogManager
@@ -100,7 +101,10 @@ class FullRemoteTest {
     fun clientMovesAndCallsGetsResult() {
         client1 = ClientGBClient(locParisToPotsdom.first(), false, brokerAddresses["Paris"]!!, 5560, "ClientGeoFaaSTest")
         locParisToPotsdom.forEach { loc ->
-            client1.updateLocation(loc)
+            var updateStatus: Model.StatusCode
+            do{
+                updateStatus = client1.updateLocation(loc)
+            } while(updateStatus == Model.StatusCode.Retry)
             val res: FunctionMessage? = client1.callFunction("sieve", "")
             if(res != null) println("Result: ${res.data}")
             assertNotNull(res)
