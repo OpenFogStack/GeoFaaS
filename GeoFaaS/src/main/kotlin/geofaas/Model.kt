@@ -11,7 +11,8 @@ object Model {
     enum class StatusCode { Success, Failure, // common
         AlreadyExist, NotExist,               // for Sub/unSub
         Retry,                                // for listens with unexpected msg
-        WrongBroker                           // for handling the case another responsible broker exist
+        WrongBroker,                          // for handling the case another responsible broker exist
+        NotConnected                          // for any disGb ack (e.g. subAck) to wrong broker
     }
 
     data class GeoFaaSFunction (val name: String)

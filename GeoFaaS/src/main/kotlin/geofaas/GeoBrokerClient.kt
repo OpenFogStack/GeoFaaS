@@ -238,7 +238,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         }
     }
     fun listenForPubAckAndProcess(funcAct: FunctionAction, funcName: String, timeout: Int): StatusCode {
-        val enqueuedAck = ackQueue.poll() //FIXME: the ack could also be a Disconnect, SubAck or UnSubAck, or others
+        val enqueuedAck = ackQueue.poll() //TODO: the ack could also be a SubAck or UnSubAck, and maybe others
         if (enqueuedAck == null) {
             if (timeout > 0)
                 logger.debug("PubAck queue is empty. Listening for a PubAck for ${timeout}ms...")
@@ -296,6 +296,10 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                 location = newLoc
                 logger.info("location updated to {}", location)
                 return StatusCode.Success
+            } else if(pubAck.reasonCode == ReasonCode.NotConnectedOrNoLocation){
+                location = newLoc
+                logger.warn("Not Connected, but location updated to {}", location)
+                return StatusCode.NotConnected
             } else {
                 logger.fatal("unexpected reason code: {}", pubAck.reasonCode)
                 throw RuntimeException("Error updating the location to $newLoc")
@@ -353,8 +357,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             else if(connAck.reasonCode == ReasonCode.WrongBroker && connAck.brokerInfo != null) {
                 logger.warn("Wrong Broker! Responsible broker is: {}", connAck.brokerInfo)
                 return StatusCode.WrongBroker
-            }
-            else
+            } else
                 logger.fatal("${connAck.reasonCode}! can't connect to the geobroker ${broker.ip}:${broker.port}. other suggested server? ${connAck.brokerInfo}")
 
             return StatusCode.Failure
