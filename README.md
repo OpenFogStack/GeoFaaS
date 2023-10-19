@@ -114,4 +114,4 @@ GeoFaaS is independent of the FaaS module. tinyFaaS could be replaced by any Faa
 - timeout for initial connection is 8 seconds. Client's listening timeout for the Ack after calling a function is 8.5 seconds.  
 - in geoBroker to make the client's location updated, should publish a PingReqPayload  
 - GeoFaaS may processes and enqueues all the geographically (and topic) relevant messages. later can use the receiver id to process/dismiss  
-- the debug logs/comments I added can be found by searching fo `>>>`s  
+- the debug logs/comments I added can be found by searching for `>>>` and `//\\`  

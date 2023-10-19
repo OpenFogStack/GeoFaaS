@@ -199,8 +199,8 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
     fun listenForFunction(type: String, timeout: Int): FunctionMessage? {
         // function call/ack/nack/result
         val msg: Payload?
-        val enqueuedPub = pubQueue.poll()
-        if (enqueuedPub == null) {
+        val dequeuedPub = pubQueue.poll()
+        if (dequeuedPub == null) {
             logger.info("Listening to the geoBroker server for a '$type'...")
             msg = when (timeout){
                 0 -> gbSimpleClient.receive() // blocking
@@ -212,8 +212,8 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             }
             logger.debug("EVENT from geoBroker: {}", msg)
         } else {
-            msg = enqueuedPub
-            logger.debug("Pub queue's size is ${pubQueue.size}. dequeued: {}", enqueuedPub)
+            msg = dequeuedPub
+            logger.debug("Pub queue's size is ${pubQueue.size}. dequeued: {}", dequeuedPub)
         }
 
         if (msg is Payload.PUBLISHPayload) {
