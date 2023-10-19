@@ -8,16 +8,22 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import org.apache.logging.log4j.LogManager
 
-class Client (loc: Location, debug: Boolean, host: String, port: Int, id: String){
+class Client (loc: Location, debug: Boolean, host: String, port: Int, id: String = "ClientGeoFaaS1"){
     private val logger = LogManager.getLogger()
     private val gbClient = ClientGBClient(loc, debug, host, port, id, 8000, 3000)
+    val id
+        get() = gbClient.id
 
     fun moveTo(loc: Location): StatusCode {
-        return gbClient.updateLocation(loc)
+        var updateStatus: StatusCode
+        do{
+            updateStatus = gbClient.updateLocation(loc)
+        } while(updateStatus == StatusCode.Retry)
+        return updateStatus
     }
 
     fun call(funcName: String, param: String): String? {
-        var retries = 3
+        var retries = 1 //2
         var result: FunctionMessage?
         do{
             result = gbClient.callFunction(funcName, param, 0.1)
@@ -35,34 +41,22 @@ class Client (loc: Location, debug: Boolean, host: String, port: Int, id: String
         gbClient.terminate()
     }
 
-    fun id(): String {
-        return gbClient.id
-    }
-
 }
 
-    val clientLoc = mapOf("middleButCloserToParis" to Location(50.289339,3.801270),
-        "parisNonOverlap" to Location(48.719961,1.153564),
-        "parisOverlap" to Location(48.858391, 2.327385), // overlaps with broker area but the broker is not inside the fence
-        "paris1" to Location(48.835797,2.244301), // Boulogne Bilancourt area in Paris
-        "reims" to Location(49.246293,4.031982), // East France. inside parisEdge
-        "parisEdge" to Location(48.877366, 2.359708),
-        "saarland" to Location(49.368066,6.976318),
-        "frankfurtEdge" to Location(50.106732,8.663124),
-        "darmstadt" to Location(49.883132,8.646240),
-        "potsdam" to Location(52.400953,13.060169),
-        "franceEast" to Location(47.323931,5.174561),
-        "amsterdam" to Location(52.315195,4.894409),
-        "hamburg" to Location(53.527248,9.986572),
-        "belgium" to Location(50.597186,4.822998)
-    )
-val locParisToPotsdom = listOf(Location(48.922499,2.570801),
-    Location(49.188884,3.955078), // paris
-//    Location(50.520412,4.702148), // Reims
-    Location(50.722547,7.097168), // Belgium
-    Location(51.371780,9.624023), // Bonn
-    Location(53.199452,10.678711), //Hamburg. out of range
-    Location(52.308479,13.073730) // potsdam
+val clientLoc = mapOf("middleButCloserToParis" to Location(50.289339,3.801270),
+    "parisNonOverlap" to Location(48.719961,1.153564),
+    "parisOverlap" to Location(48.858391, 2.327385), // overlaps with broker area but the broker is not inside the fence
+    "paris1" to Location(48.835797,2.244301), // Boulogne Bilancourt area in Paris
+    "reims" to Location(49.246293,4.031982), // East France. inside parisEdge
+    "parisEdge" to Location(48.877366, 2.359708),
+    "saarland" to Location(49.368066,6.976318),
+    "frankfurtEdge" to Location(50.106732,8.663124),
+    "darmstadt" to Location(49.883132,8.646240),
+    "potsdam" to Location(52.400953,13.060169),
+    "franceEast" to Location(47.323931,5.174561),
+    "amsterdam" to Location(52.315195,4.894409),
+    "hamburg" to Location(53.527248,9.986572),
+    "belgium" to Location(50.597186,4.822998)
 )
 val locFranceToPoland = listOf("Paris" to Location(48.936935,2.702637), // paris
     "Reims" to Location(49.282140,4.042969), // Reims
@@ -98,55 +92,44 @@ val brokerAddresses = mapOf("Frankfurt" to "141.23.28.205",
 
 suspend fun main() {
 
-    val debug = false
-    val clientLocPairs = mutableListOf<Pair<Client, List<Pair<String,Location>>>>()
-    clientLocPairs.add(Client(locFranceToPoland.first().second, debug, brokerAddresses["Paris"]!!, 5560, "ClientGeoFaaS1") to locFranceToPoland)
-    clientLocPairs.add(Client(locBerlinToFrance.first().second, debug, brokerAddresses["Berlin"]!!, 5560, "ClientGeoFaaS2") to locBerlinToFrance)
-//    clientLocPairs.add(Client(locFrankParisBerlin.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "ClientGeoFaaS3") to locFrankParisBerlin)
-    coroutineScope {
-        clientLocPairs.forEach { clientLocPair ->
-            launch {
-                val client = clientLocPair.first
-                val locations = clientLocPair.second
-                println("${client.id()} Started at ${locations.first().first}")
-                locations.forEachIndexed { i, loc ->
-                    sleepNoLog(3000, 0)
-                    if (i > 0) {
-                        println("${client.id()} is going to ${loc.first}")
-                        client.moveTo(loc.second)
-                        sleepNoLog(6000, 0)
-                    }
-                    val res: String? = client.call("sieve", client.id())
-                    if(res != null) println("${client.id()} Result: $res")
-                    else println("${client.id()}: NOOOOOOOOOOOOOOO!")
-                }
-                client.shutdown()
-            }
-        }
-    }
+    val debug = true
+//    val clientLocPairs = mutableListOf<Pair<Client, List<Pair<String,Location>>>>()
+//    clientLocPairs.add(Client(locFranceToPoland.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "ClientGeoFaaS1") to locFranceToPoland)
+////    clientLocPairs.add(Client(locBerlinToFrance.first().second, debug, brokerAddresses["Berlin"]!!, 5560, "ClientGeoFaaS2") to locBerlinToFrance)
+////    clientLocPairs.add(Client(locFrankParisBerlin.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "ClientGeoFaaS3") to locFrankParisBerlin)
+//    coroutineScope {
+//        clientLocPairs.forEach { clientLocPair ->
+//            launch {
+//                val client = clientLocPair.first
+//                val locations = clientLocPair.second
+//                println("${client.id()} Started at ${locations.first().first}")
+//                locations.forEachIndexed { i, loc ->
+//                    sleepNoLog(3000, 0)
+//                    if (i > 0) {
+//                        println("${client.id()} is going to ${loc.first}")
+//                        client.moveTo(loc.second)
+//                        sleepNoLog(6000, 0)
+//                    }
+//                    val res: String? = client.call("sieve", client.id())
+//                    if(res != null) println("${client.id()} Result: $res")
+//                    else println("${client.id()}: NOOOOOOOOOOOOOOO!")
+//                }
+//                client.shutdown()
+//            }
+//        }
+//    }
     /////////////////2 local 2 nodes//////
-//    val client1 = Client(clientLoc["paris1"]!!, true, brokerAddresses["Local"]!!, 5559)
-//    sleepNoLog(2000, 0)
+    val client1 = Client(clientLoc["paris1"]!!, debug, brokerAddresses["Local"]!!, 5559)
+    sleepNoLog(2000, 0)
 //    val res: String? = client1.call("sieve", "")
 //    if(res != null) println("Result: $res")
-//    sleepNoLog(2000, 0)
-//
-//    client1.moveTo(clientLoc["saarland"]!!)
-//    sleepNoLog(2000, 0)
-//    val res2: String? = client1.call("sieve", "")
-//    if(res2 != null) println("Result: $res")
-//    sleepNoLog(2000, 0)
-//    client1.shutdown()
+    sleepNoLog(5000, 0)
 
-    /////////////////3/////////////
-//    val client1 = Client(locParisToPotsdom.first(), false, brokerAddresses["Paris"]!!, 5560)
-//    locParisToPotsdom.forEach { loc ->
-//        sleepNoLog(3000, 0)
-//        client1.moveTo(loc)
-//        sleepNoLog(6000, 0)
-//        val res: String? = client1.call("sieve", "")
-//        if(res != null) println("Result: $res")
-//    }
-//    client1.shutdown()
+    client1.moveTo(clientLoc["darmstadt"]!!)
+    sleepNoLog(2000, 0)
+//    val res2: String? = client1.call("sieve", "")
+//    if(res2 != null) println("Result: $res2")
+//    sleepNoLog(2000, 0)
+    client1.shutdown()
 
 }
