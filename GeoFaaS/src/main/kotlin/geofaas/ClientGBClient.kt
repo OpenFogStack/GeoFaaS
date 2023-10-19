@@ -14,7 +14,7 @@ import geofaas.Model.ResponseInfoPatched
 import geofaas.Model.StatusCode
 import org.apache.logging.log4j.LogManager
 
-class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "ClientGeoFaaS1"): GeoBrokerClient(loc, ClientType.CLIENT, debug, host, port, id) {
+class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "ClientGeoFaaS1", private val ackTimeout: Int = 8000, private val resTimeout: Int = 3000): GeoBrokerClient(loc, ClientType.CLIENT, debug, host, port, id) {
     private val logger = LogManager.getLogger()
     fun callFunction(funcName: String, data: String, radiusDegree: Double = 0.1): FunctionMessage? {
         logger.info("calling '$funcName' function with following param: '$data'")
@@ -29,7 +29,7 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
         val responseTopicFence = ResponseInfoPatched(id, Topic("functions/$funcName/result"), subFence.toJson())
         val message = gson.toJson(FunctionMessage(funcName, FunctionAction.CALL, data, TypeCode.NORMAL, "GeoFaaS", responseTopicFence))
         gbSimpleClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call"), pubFence, message))
-        val pubAck = gbSimpleClient.receiveWithTimeout(8000) // TODO: replace with 'listenForPubAckAndProcess()'
+        val pubAck = gbSimpleClient.receiveWithTimeout(ackTimeout) // TODO: replace with 'listenForPubAckAndProcess()'
         val pubStatus = processPublishAckSuccess(pubAck, funcName, FunctionAction.CALL, true)
         if (pubStatus != StatusCode.Success && pubStatus != StatusCode.WrongBroker) return null
 
@@ -46,7 +46,7 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
                             throw RuntimeException("Failed to subscribe to '$resultTopic'" )
                         else // either Success or AlreadyExist
                              listeningTopics.add(ListeningTopic(resultTopic, subFence))
-                        res = listenForResult()
+                        res = listenForResult(resTimeout)
                     } else
                         throw RuntimeException("Failed to switch the broker. StatusCode: $changeStatus" )
                 }
@@ -56,15 +56,15 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
                 var retryCount = 3
                 var ackSender :String?
                 do {
-                    ackSender = listenForAck(8500) // blocking
-                    if (ackSender == null)
-                        logger.info("attempts remained for getting the ack: {}", retryCount - 1)
+                    ackSender = listenForAck(ackTimeout) // blocking
                     retryCount--
+                    if (ackSender == null)
+                        logger.info("attempts remained for getting the ack: {}", retryCount)
                 } while (ackSender == null && retryCount > 0) // retry
 
                 // wait for the result from the GeoFaaS
                 if (ackSender != null){
-                    res = listenForResult()
+                    res = listenForResult(resTimeout)
                 }
             }
         }
@@ -79,11 +79,12 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
 //        return null
     }
 
-    private fun listenForAck(ackTimeout: Int): String? {
+    // Returns the ack's sender id or null
+    private fun listenForAck(timeout: Int): String? {
         // Wait for GeoFaaS's response
         var ack: FunctionMessage?
         do {
-            ack = listenForFunction("ACK", ackTimeout)
+            ack = listenForFunction("ACK", timeout)
         } while (ack != null && ack.receiverId != id) // post-process receiver-id. as in pub/sub you may also need messages with other receiver ids
 
         if (ack != null) {
@@ -96,21 +97,21 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
                 return null
             }
         } else {
-            logger.error("Expected an ACK in ${ackTimeout}ms, but null response received from GeoBroker!")
+            logger.error("Expected an ACK in ${timeout}ms, but null response received from GeoBroker!")
             return null
         }
     }
-    private fun listenForResult(): FunctionMessage? {
+    private fun listenForResult(timeout: Int): FunctionMessage? {
         var res: FunctionMessage?
         var resultCounter = 0
         do {
-            res = listenForFunction("RESULT", 0)
+            res = listenForFunction("RESULT", timeout)
             resultCounter++
-        } while (res == null || res.receiverId != id)
+        } while (res != null && res.receiverId != id)
         logger.info("{} Message(s) processed when listening for the result", resultCounter)
 
-        if(res.funcAction == FunctionAction.RESULT) return res
-        else logger.error("Expected an RESULT, but received: {}", res)
+        if(res?.funcAction == FunctionAction.RESULT) return res
+        else logger.error("Expected a RESULT, but received: {}", res)
         return null
     }
 }
