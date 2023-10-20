@@ -25,9 +25,10 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
     private val logger = LogManager.getLogger()
     private val processManager = ZMQProcessManager()
     var listeningTopics = mutableSetOf<ListeningTopic>()
-    protected val ackQueue : Queue<Payload> = LinkedList<Payload>()
-    protected val pubQueue : Queue<Payload> = LinkedList<Payload>()
-    var gbSimpleClient = SimpleClient(host, port, identity = id)
+    private val ackQueue : Queue<Payload> = LinkedList<Payload>()
+    private val pubQueue : Queue<Payload> = LinkedList<Payload>()
+    private val visitedBrokers = mutableSetOf<Pair<String, Int>>()
+    var gbSimpleClient = SimpleClient(host, port, identity = id) // NOTE: 'gbSimpleClient.identity' and 'GeoBrokerClient.id' are only same on the initialization and the former could change later
     val gson = Gson()
     init {
         if (debug) { setLogLevel(logger, Level.DEBUG) }
@@ -117,7 +118,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             val subAck = gbSimpleClient.receiveWithTimeout(8000)
             return if (subAck is Payload.SUBACKPayload){
                 if (subAck.reasonCode == ReasonCode.GrantedQoS0){
-                    logger.info("$id successfully subscribed to '${topic.topic}' in $fence. details: {}", subAck)
+                    logger.debug("$id successfully subscribed to '${topic.topic}' in $fence. details: {}", subAck)
                     StatusCode.Success
                 } else {
                     logger.error("Error Subscribing to '${topic.topic}' by $id. Reason: {}.", subAck.reasonCode)
@@ -188,7 +189,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             val unsubAck = if (ackQueue.peek() is Payload.UNSUBACKPayload) ackQueue.remove() else gbSimpleClient.receiveWithTimeout(8000)
             if (unsubAck is Payload.UNSUBACKPayload) {
                 if (unsubAck.reasonCode == ReasonCode.Success){
-                    logger.info("GeoBroker's unSub ACK for $id:  topic: '{}'", topic.topic)
+                    logger.debug("GeoBroker's unSub ACK for $id:  topic: '{}'", topic.topic)
                     return StatusCode.Success
                 } else {
                     logger.error("Error unSubscribing from '${topic.topic}' by $id. Reason: {}.", unsubAck.reasonCode)
@@ -198,6 +199,9 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                 pubQueue.add(unsubAck)
                 logger.warn("Not a unSubAck ! adding it to the 'pubQueue'. dump: {}", unsubAck)
                 return StatusCode.Retry
+            } else if (unsubAck == null) {
+                logger.error("Error unSubscribing from '${topic.topic}' by $id. No response from the broker")
+                return StatusCode.Failure
             } else {
                 ackQueue.add(unsubAck)
                 logger.warn("Not a unSubAck! adding it to the 'ackQueue'. dump: {}", unsubAck)
@@ -293,7 +297,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                 if (pubAck.brokerInfo != null) {
                     val changeStatus = changeBroker(pubAck.brokerInfo!!)
                     if (changeStatus == StatusCode.Success) {
-                        logger.info("location updated to {}", location)
+                        logger.info("$id's location updated to {}", location)
                         return StatusCode.Success
                     } else {
                         logger.fatal("Failed to change the broker. And the previous broker is no longer responsible")
@@ -335,22 +339,30 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         }
     }
 
-    protected fun changeBroker(broker: BrokerInfo): StatusCode {
-        logger.warn("changing the remote broker to $broker...")
+    protected fun changeBroker(newBroker: BrokerInfo): StatusCode {
+        logger.warn("changing the remote broker to $newBroker...")
         val oldBroker = gbSimpleClient
-        gbSimpleClient = SimpleClient(broker.ip, broker.port, identity = id)
+        var clientId = id // Note: GeoBrokerClient.id never changes
+        visitedBrokers.add(Pair(gbSimpleClient.ip, gbSimpleClient.port))
+        if ( visitedBrokers.contains(Pair(newBroker.ip, newBroker.port)) ){
+            logger.debug("clearing visitedBrokers with size of {}", visitedBrokers.size)
+            visitedBrokers.clear()
+            clientId += "_${Date().time}" // to patch problem with reconnecting brokers
+        }
+        gbSimpleClient = SimpleClient(newBroker.ip, newBroker.port, identity = clientId)
         gbSimpleClient.send(Payload.CONNECTPayload(location)) // connect
 
         val connAck = gbSimpleClient.receiveWithTimeout(8000)
-        val connStatus = processConnAckSuccess(connAck, broker, true)
+        val connStatus = processConnAckSuccess(connAck, newBroker, true)
 
         if(connStatus == StatusCode.Success) {
-            logger.info("connected to the {} broker", broker.brokerId)
+            logger.info("connected to the {} broker", newBroker.brokerId)
+            oldBroker.send(Payload.DISCONNECTPayload(ReasonCode.NormalDisconnection)) // disconnect
             oldBroker.tearDownClient()
             logger.info("disconnected from the previous broker")
             return StatusCode.Success
         } else { // TODO handle 'StatusCode.WrongBroker', and reconnect to the correct broker
-            logger.error("failed to change the remote broker to: $broker. Thus, remote geobroker is not changed")
+            logger.error("failed to change the remote broker to: ${newBroker.brokerId}. Thus, remote geobroker is not changed")
             gbSimpleClient = oldBroker
             return StatusCode.Failure
         }
@@ -385,9 +397,9 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             return StatusCode.Failure
         } else if (connAck == null) {
             if (withTimeout)
-                throw RuntimeException("Timeout! can't connect to the geobroker ${broker.ip}:${broker.port}. Check the Address and try again")
+                throw RuntimeException("Timeout! $id can't connect to the geobroker ${broker.ip}:${broker.port}. Check the Address and try again")
             else
-                throw RuntimeException("Empty Response! can't connect to the geobroker ${broker.ip}:${broker.port}. Check the Address and try again")
+                throw RuntimeException("Empty Response! $id can't connect to the geobroker ${broker.ip}:${broker.port}. Check the Address and try again")
         } else {
             logger.fatal("Unexpected 'Conn ACK'! Received geoBroker's answer: {}", connAck)
             return StatusCode.Failure
@@ -415,8 +427,8 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
     protected fun logPublishAck(pubAck: Payload.PUBACKPayload, logMsg: String): Boolean {
         // logMsg: "GeoBroker's 'Publish ACK' for the '$funcName' ACK by $id: {}"
         when (pubAck.reasonCode) {
-            ReasonCode.GrantedQoS0 -> logger.info(logMsg, pubAck)
-            ReasonCode.Success -> logger.info(logMsg, pubAck)
+            ReasonCode.GrantedQoS0 -> logger.debug(logMsg, pubAck)
+            ReasonCode.Success -> logger.debug(logMsg, pubAck)
             ReasonCode.NoMatchingSubscribersButForwarded -> logger.warn(logMsg, pubAck.reasonCode)
             ReasonCode.NoMatchingSubscribers -> {
                 logger.error("$logMsg. Terminating..?", pubAck.reasonCode)
