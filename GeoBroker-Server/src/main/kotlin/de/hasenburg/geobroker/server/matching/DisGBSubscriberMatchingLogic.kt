@@ -254,23 +254,41 @@ class DisGBAtSubscriberMatchingLogic(private val clientDirectory: ClientDirector
      * @return true, if this broker is responsible, otherwise false
      */
     private fun weAreResponsible(clientIdentifier: String, clientLocation: Location?, clients: Socket): Boolean {
+        when (brokerAreaManager.ownBrokerId) { // exception for cloud geobroker
+            "Cloud" -> {
+                val repBroker = brokerAreaManager.getOtherBrokerContainingLocation(clientLocation)
+                if (repBroker == null)
+                    return true
+                else {
+                    val response = DISCONNECTPayload(ReasonCode.WrongBroker, repBroker).toZMsg(clientIdentifier)
+                    logger.debug("The {} is inside {} area, So ${brokerAreaManager.ownBrokerId} is no longer responsible", clientIdentifier, repBroker)
 
-        if (!brokerAreaManager.checkIfOurAreaContainsLocation(clientLocation)) {
-            // get responsible broker
-            val repBroker = brokerAreaManager.getOtherBrokerContainingLocation(clientLocation)
+                    sendResponse(response, clients)
+                    logger.debug("Client had {} active subscriptions",
+                        clientDirectory.getCurrentClientSubscriptions(clientIdentifier))
+                    clientDirectory.removeClient(clientIdentifier)
+                    return false
+                }
+            }
+            else -> {
+                if (!brokerAreaManager.checkIfOurAreaContainsLocation(clientLocation)) {
+                    // get responsible broker
+                    val repBroker = brokerAreaManager.getOtherBrokerContainingLocation(clientLocation)
 
-            val response = DISCONNECTPayload(ReasonCode.WrongBroker, repBroker).toZMsg(clientIdentifier)
-            logger.debug("Not responsible for client {}, responsible broker is {}", clientIdentifier, repBroker)
+                    val response = DISCONNECTPayload(ReasonCode.WrongBroker, repBroker).toZMsg(clientIdentifier)
+                    logger.debug("Not responsible for client {}, responsible broker is {}", clientIdentifier, repBroker)
 
-            sendResponse(response, clients)
+                    sendResponse(response, clients)
 
-            // TODO F: migrate client data to other broker, right now he has to update the information himself
-            logger.debug("Client had {} active subscriptions",
-                    clientDirectory.getCurrentClientSubscriptions(clientIdentifier))
-            clientDirectory.removeClient(clientIdentifier)
-            return false
+                    // TODO F: migrate client data to other broker, right now he has to update the information himself
+                    logger.debug("Client had {} active subscriptions",
+                            clientDirectory.getCurrentClientSubscriptions(clientIdentifier))
+                    clientDirectory.removeClient(clientIdentifier)
+                    return false
+                }
+                return true
+            }
         }
-        return true
     }
 
 }

@@ -17,7 +17,7 @@ class Client (loc: Location, debug: Boolean, host: String, port: Int, id: String
     fun moveTo(loc: Location): StatusCode {
         var updateStatus: StatusCode
         do{
-            updateStatus = gbClient.updateLocation(loc)
+            updateStatus = gbClient.updateLocation(loc).first
         } while(updateStatus == StatusCode.Retry)
         return updateStatus
     }
@@ -29,11 +29,12 @@ class Client (loc: Location, debug: Boolean, host: String, port: Int, id: String
             result = gbClient.callFunction(funcName, param, 0.1)
             retries--
             if (result == null)
-                logger.debug("Call failed. attempts remained for getting the result: {}", retries)
+                logger.info("Call failed. attempts remained for getting the result: {}", retries)
         } while(result == null && retries > 0)
         if (result == null)
             logger.error("No result received after retries!")
 
+        logger.debug("client gb id: {}", gbClient.basicClient.identity)
         return result?.data
     }
 
@@ -93,43 +94,44 @@ val brokerAddresses = mapOf("Frankfurt" to "141.23.28.205",
 suspend fun main() {
 
     val debug = true
-//    val clientLocPairs = mutableListOf<Pair<Client, List<Pair<String,Location>>>>()
-//    clientLocPairs.add(Client(locFranceToPoland.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "ClientGeoFaaS1") to locFranceToPoland)
-////    clientLocPairs.add(Client(locBerlinToFrance.first().second, debug, brokerAddresses["Berlin"]!!, 5560, "ClientGeoFaaS2") to locBerlinToFrance)
-////    clientLocPairs.add(Client(locFrankParisBerlin.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "ClientGeoFaaS3") to locFrankParisBerlin)
-//    coroutineScope {
-//        clientLocPairs.forEach { clientLocPair ->
-//            launch {
-//                val client = clientLocPair.first
-//                val locations = clientLocPair.second
-//                println("${client.id()} Started at ${locations.first().first}")
-//                locations.forEachIndexed { i, loc ->
+    val clientLocPairs = mutableListOf<Pair<Client, List<Pair<String,Location>>>>()
+    clientLocPairs.add(Client(locFranceToPoland.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "ClientGeoFaaS1") to locFranceToPoland)
+    clientLocPairs.add(Client(locBerlinToFrance.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "ClientGeoFaaS2") to locBerlinToFrance)
+    clientLocPairs.add(Client(locFrankParisBerlin.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "ClientGeoFaaS3") to locFrankParisBerlin)
+    coroutineScope {
+        clientLocPairs.forEach { clientLocPair ->
+            launch {
+                val client = clientLocPair.first
+                val locations = clientLocPair.second
+                println("${client.id} Started at ${locations.first().first}")
+                locations.forEachIndexed { i, loc ->
 //                    sleepNoLog(3000, 0)
-//                    if (i > 0) {
-//                        println("${client.id()} is going to ${loc.first}")
-//                        client.moveTo(loc.second)
+                    if (i > 0) {
+                        println("${client.id} is going to ${loc.first}")
+                        client.moveTo(loc.second)
 //                        sleepNoLog(6000, 0)
-//                    }
-//                    val res: String? = client.call("sieve", client.id())
-//                    if(res != null) println("${client.id()} Result: $res")
-//                    else println("${client.id()}: NOOOOOOOOOOOOOOO!")
-//                }
-//                client.shutdown()
-//            }
-//        }
-//    }
+                    }
+                    val res: String? = client.call("sieve", client.id)
+                    if(res != null) println("${client.id} Result: $res")
+                    else println("${client.id}: NOOOOOOOOOOOOOOO Response!")
+                }
+                client.shutdown()
+                println("${client.id} finished!")
+            }
+        }
+    }
     /////////////////2 local 2 nodes//////
-    val client1 = Client(clientLoc["paris1"]!!, debug, brokerAddresses["Local"]!!, 5559)
-    sleepNoLog(2000, 0)
-//    val res: String? = client1.call("sieve", "")
-//    if(res != null) println("Result: $res")
-    sleepNoLog(5000, 0)
-
-    client1.moveTo(clientLoc["darmstadt"]!!)
-    sleepNoLog(2000, 0)
-//    val res2: String? = client1.call("sieve", "")
-//    if(res2 != null) println("Result: $res2")
+//    val client1 = Client(clientLoc["paris1"]!!, debug, brokerAddresses["Local"]!!, 5559)
 //    sleepNoLog(2000, 0)
-    client1.shutdown()
+////    val res: String? = client1.call("sieve", "")
+////    if(res != null) println("Result: $res")
+//    sleepNoLog(5000, 0)
+//
+//    client1.moveTo(clientLoc["darmstadt"]!!)
+//    sleepNoLog(2000, 0)
+////    val res2: String? = client1.call("sieve", "")
+////    if(res2 != null) println("Result: $res2")
+////    sleepNoLog(2000, 0)
+//    client1.shutdown()
 
 }

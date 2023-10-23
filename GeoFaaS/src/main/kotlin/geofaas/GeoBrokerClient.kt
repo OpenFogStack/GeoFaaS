@@ -310,7 +310,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         }
     }
 
-    fun updateLocation(newLoc :Location) :StatusCode{
+    fun updateLocation(newLoc :Location) : Pair<StatusCode, BrokerInfo?> {
         basicClient.send(Payload.PINGREQPayload(newLoc))
         val pubAck = if (ackQueue.peek() is Payload.PINGRESPPayload) ackQueue.remove() else basicClient.receiveWithTimeout(8000)
         logger.debug("ping ack: {}", pubAck) //DISCONNECTPayload(reasonCode=WrongBroker, brokerInfo=BrokerInfo(brokerId=Frankfurt, ip=localhost, port=5559)
@@ -322,7 +322,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                     val changeStatus = changeBroker(pubAck.brokerInfo!!)
                     if (changeStatus == StatusCode.Success) {
                         logger.info("$id's location updated to {}", location)
-                        return StatusCode.Success
+                        return Pair(StatusCode.Success, pubAck.brokerInfo)
                     } else {
                         logger.fatal("Failed to change the broker. And the previous broker is no longer responsible")
                         throw RuntimeException("Error updating the location to $newLoc")
@@ -339,42 +339,42 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             if(pubAck.reasonCode == ReasonCode.LocationUpdated) { // success
                 location = newLoc
                 logger.info("location updated to {}", location)
-                return StatusCode.Success
+                return Pair(StatusCode.Success, null)
             } else if(pubAck.reasonCode == ReasonCode.NotConnectedOrNoLocation){
                 location = newLoc
                 logger.warn("Not Connected, but location updated to {}", location)
-                return StatusCode.NotConnected
+                return Pair(StatusCode.NotConnected, null)
             } else {
                 logger.fatal("unexpected reason code: {}", pubAck.reasonCode)
                 throw RuntimeException("Error updating the location to $newLoc")
             }
         } else if (pubAck == null) {
             logger.error("Updating location failed! No response from the '${basicClient.identity}' broker")
-            return StatusCode.Failure
+            return Pair(StatusCode.Failure, null)
         } else if (pubAck is Payload.PUBLISHPayload) {
             val message = gson.fromJson(pubAck.content, FunctionMessage::class.java)
             if (message.receiverId == id) {
                 pubQueue.add(pubAck) // to be processed by listenForFunction()
                 logger.warn("Not a PINGRESPayload! adding it to the 'pubQueue'. dump: {}", pubAck)
             }
-            return StatusCode.Retry
+            return Pair(StatusCode.Retry, null)
         }
         else {
             ackQueue.add(pubAck)
             logger.warn("Not a PINGRESPayload! adding it to the 'ackQueue'. dump: {}", pubAck)
-            return StatusCode.Retry
+            return Pair(StatusCode.Retry, null)
         }
     }
 
     protected fun changeBroker(newBroker: BrokerInfo): StatusCode {
         logger.warn("changing the remote broker to $newBroker...")
         val oldBroker = basicClient
-        var clientId = id // Note: GeoBrokerClient.id never changes
+        var clientId = basicClient.identity // Note: GeoBrokerClient.id never changes
         visitedBrokers.add(Pair(basicClient.ip, basicClient.port))
         if ( visitedBrokers.contains(Pair(newBroker.ip, newBroker.port)) ){
             logger.debug("clearing visitedBrokers with size of {}", visitedBrokers.size)
             visitedBrokers.clear()
-            clientId += "_${Date().time}" // to patch problem with reconnecting brokers
+            clientId = id + "_${Date().time}" // to patch problem with reconnecting brokers
         }
         basicClient = GBBasicClient(newBroker.ip, newBroker.port, identity = clientId)
         basicClient.send(Payload.CONNECTPayload(location)) // connect
