@@ -41,7 +41,10 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
                     if (changeStatus == StatusCode.Success) {
                         // TODO move all the subscriptions to the new broker? isn't needed now
                         val resultTopic = Topic("functions/$funcName/result")
-                        val newSubscribeStatus = subscribe(resultTopic, subFence)
+                        var newSubscribeStatus: StatusCode
+                        do {
+                            newSubscribeStatus = subscribe(resultTopic, subFence)
+                        } while(newSubscribeStatus == StatusCode.Retry)
                         if(newSubscribeStatus == StatusCode.Failure)
                             throw RuntimeException("Failed to subscribe to '$resultTopic'" )
                         else // either Success or AlreadyExist
