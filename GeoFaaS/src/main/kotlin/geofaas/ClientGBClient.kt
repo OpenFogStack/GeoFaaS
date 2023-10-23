@@ -28,8 +28,8 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
         // Call the function
         val responseTopicFence = ResponseInfoPatched(id, Topic("functions/$funcName/result"), subFence.toJson())
         val message = gson.toJson(FunctionMessage(funcName, FunctionAction.CALL, data, TypeCode.NORMAL, "GeoFaaS", responseTopicFence))
-        gbSimpleClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call"), pubFence, message))
-        val pubAck = gbSimpleClient.receiveWithTimeout(ackTimeout) // TODO: replace with 'listenForPubAckAndProcess()'
+        basicClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call"), pubFence, message))
+        val pubAck = basicClient.receiveWithTimeout(ackTimeout) // TODO: replace with 'listenForPubAckAndProcess()'
         val pubStatus = processPublishAckSuccess(pubAck, funcName, FunctionAction.CALL, true)
         if (pubStatus != StatusCode.Success && pubStatus != StatusCode.WrongBroker) return null
 

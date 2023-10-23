@@ -14,7 +14,6 @@ import geofaas.Model.ListeningTopic
 import geofaas.Model.ClientType
 import geofaas.Model.StatusCode
 import org.apache.logging.log4j.LogManager
-import java.util.*
 
 class ServerGBClient(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSServerTest", mode: ClientType, val brokerAreaManager: BrokerAreaManager) :GeoBrokerClient(loc, mode, debug, host, port, id) {
     private val logger = LogManager.getLogger()
@@ -24,10 +23,10 @@ class ServerGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
     fun sendResult(funcName: String, res: String, clientFence: Geofence, clientId: String) {
         val responseTopicFence = ResponseInfoPatched(id, null, brokerArea.toJson()) // null topic = not listening for any response
         val message = FunctionMessage(funcName, FunctionAction.RESULT, res, TypeCode.NORMAL, clientId, responseTopicFence)
-        gbSimpleClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/result"), clientFence, gson.toJson(message))) // Json.encodeToString(FunctionMessage.serializer(), message)
+        basicClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/result"), clientFence, gson.toJson(message))) // Json.encodeToString(FunctionMessage.serializer(), message)
         var pubStatus = listenForPubAckAndProcess(FunctionAction.RESULT, funcName, 8000)
         while (pubStatus == StatusCode.Retry){
-            logger.info("Retry listening for the Result")
+            logger.info("Retry listening for the Result's delivery confirmation")
             pubStatus = listenForPubAckAndProcess(FunctionAction.RESULT, funcName, 8000)
         }
     }
@@ -35,10 +34,10 @@ class ServerGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
     fun sendAck(funcName: String, clientFence: Geofence, clientId: String) {
         val responseTopicFence = ResponseInfoPatched(id,null, brokerArea.toJson())
         val message = FunctionMessage(funcName, FunctionAction.ACK, "", TypeCode.NORMAL, clientId, responseTopicFence)
-        gbSimpleClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/ack"), clientFence, gson.toJson(message)))
+        basicClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/ack"), clientFence, gson.toJson(message)))
         var pubStatus = listenForPubAckAndProcess(FunctionAction.ACK, funcName, 8000)
         while (pubStatus == StatusCode.Retry){
-            logger.info("Retry listening for the Ack")
+            logger.info("Retry listening for the Ack's delivery confirmation")
             pubStatus = listenForPubAckAndProcess(FunctionAction.ACK, funcName, 8000)
         }
     }
@@ -47,10 +46,10 @@ class ServerGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
     fun sendNack(funcName: String, data: String, clientFence: Geofence, clientId: String, cloudId: String, cloudFence: Geofence = Geofence.circle(Location(0.0, 0.0), 0.1)) {
         val responseTopicFence = ResponseInfoPatched(clientId, Topic("functions/$funcName/result"), clientFence.toJson())
         val message = FunctionMessage(funcName, FunctionAction.NACK, data, TypeCode.PIGGY, cloudId, responseTopicFence)
-        gbSimpleClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/nack"), cloudFence, gson.toJson(message)))
+        basicClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/nack"), cloudFence, gson.toJson(message)))
         var pubStatus = listenForPubAckAndProcess(FunctionAction.NACK, funcName, 8000)
         while (pubStatus == StatusCode.Retry){
-            logger.info("Retry listening for the Nack")
+            logger.info("Retry listening for the Nack's delivery confirmation")
             pubStatus = listenForPubAckAndProcess(FunctionAction.NACK, funcName, 8000)
         }
         if (pubStatus == StatusCode.Failure) logger.error("failed to offload $funcName call by $clientId. Is $cloudId online?")
