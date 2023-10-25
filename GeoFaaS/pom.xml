@@ -96,8 +96,7 @@
                             <archive>
                                 <manifest>
                                     <mainClass>geofaas.EdgeKt</mainClass>
-<!--                                    <mainClass>geofaas.CloudKt</mainClass>-->
-<!--                                    <mainClass>geofaas.GBClientClientkt</mainClass>-->
+<!--                                    <mainClass>geofaas.Clientkt</mainClass>-->
                                 </manifest>
                                 <manifestEntries>
                                     <Multi-Release>true</Multi-Release>
@@ -107,8 +106,53 @@
                                 <descriptorRef>jar-with-dependencies</descriptorRef>
                             </descriptorRefs>
                             <finalName>GeoFaaSEdge</finalName>
-<!--                            <finalName>GeoFaaSCloud</finalName>-->
 <!--                            <finalName>ClientGeoFaaS</finalName>-->
+                        </configuration>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>GeoFaaSCloud</id>
+                        <configuration>
+                            <appendAssemblyId>false</appendAssemblyId>
+                            <archive>
+                                <manifest>
+                                    <mainClass>geofaas.CloudKt</mainClass>
+<!--                                    <mainClass>geofaas.Clientkt</mainClass>-->
+                                </manifest>
+                                <manifestEntries>
+                                    <Multi-Release>true</Multi-Release>
+                                </manifestEntries>
+                            </archive>
+                            <descriptorRefs>
+                                <descriptorRef>jar-with-dependencies</descriptorRef>
+                            </descriptorRefs>
+                            <finalName>GeoFaaSCloud</finalName>
+<!--                            <finalName>ClientGeoFaaS</finalName>-->
+                        </configuration>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>GeoFaaSClient</id>
+                        <configuration>
+                            <appendAssemblyId>false</appendAssemblyId>
+                            <archive>
+                                <manifest>
+                                    <mainClass>geofaas.Clientkt</mainClass>
+                                </manifest>
+                                <manifestEntries>
+                                    <Multi-Release>true</Multi-Release>
+                                </manifestEntries>
+                            </archive>
+                            <descriptorRefs>
+                                <descriptorRef>jar-with-dependencies</descriptorRef>
+                            </descriptorRefs>
+                            <finalName>ClientGeoFaaS</finalName>
                         </configuration>
                         <phase>package</phase>
                         <goals>
