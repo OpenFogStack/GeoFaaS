@@ -24,22 +24,18 @@ class ServerGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
         val responseTopicFence = ResponseInfoPatched(id, null, brokerArea.toJson()) // null topic = not listening for any response
         val message = FunctionMessage(funcName, FunctionAction.RESULT, res, TypeCode.NORMAL, clientId, responseTopicFence)
         basicClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/result"), clientFence, gson.toJson(message))) // Json.encodeToString(FunctionMessage.serializer(), message)
-        var pubStatus = listenForPubAckAndProcess(FunctionAction.RESULT, funcName, 8000)
-        while (pubStatus == StatusCode.Retry){
-            logger.info("Retry listening for the Result's delivery confirmation")
-            pubStatus = listenForPubAckAndProcess(FunctionAction.RESULT, funcName, 8000)
-        }
+        val pubStatus = listenForPubAckAndProcess(FunctionAction.RESULT, funcName, 8000)
+        if (pubStatus.first != StatusCode.Success)
+            logger.error("Unsuccessful sending Result to $clientId. StatusCode: {}", pubStatus.first)
     }
     // publishes an Acknowledgement for receiving a client's request. the client listening for it
     fun sendAck(funcName: String, clientFence: Geofence, clientId: String) {
         val responseTopicFence = ResponseInfoPatched(id,null, brokerArea.toJson())
         val message = FunctionMessage(funcName, FunctionAction.ACK, "", TypeCode.NORMAL, clientId, responseTopicFence)
         basicClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/ack"), clientFence, gson.toJson(message)))
-        var pubStatus = listenForPubAckAndProcess(FunctionAction.ACK, funcName, 8000)
-        while (pubStatus == StatusCode.Retry){
-            logger.info("Retry listening for the Ack's delivery confirmation")
-            pubStatus = listenForPubAckAndProcess(FunctionAction.ACK, funcName, 8000)
-        }
+        val pubStatus = listenForPubAckAndProcess(FunctionAction.ACK, funcName, 8000)
+        if (pubStatus.first != StatusCode.Success)
+            logger.error("Unsuccessful sending Ack to $clientId. StatusCode: {}", pubStatus.first)
     }
 
     // publishes a NotAck to offload to the cloud. the cloud listening for it
@@ -47,12 +43,10 @@ class ServerGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
         val responseTopicFence = ResponseInfoPatched(clientId, Topic("functions/$funcName/result"), clientFence.toJson())
         val message = FunctionMessage(funcName, FunctionAction.NACK, data, TypeCode.PIGGY, cloudId, responseTopicFence)
         basicClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/nack"), cloudFence, gson.toJson(message)))
-        var pubStatus = listenForPubAckAndProcess(FunctionAction.NACK, funcName, 8000)
-        while (pubStatus == StatusCode.Retry){
-            logger.info("Retry listening for the Nack's delivery confirmation")
-            pubStatus = listenForPubAckAndProcess(FunctionAction.NACK, funcName, 8000)
-        }
-        if (pubStatus == StatusCode.Failure) logger.error("failed to offload $funcName call by $clientId. Is $cloudId online?")
+        val pubStatus = listenForPubAckAndProcess(FunctionAction.NACK, funcName, 8000)
+        if (pubStatus.first == StatusCode.Failure) logger.error("failed to offload $funcName call by $clientId. Is $cloudId online?")
+        else if(pubStatus.first != StatusCode.Success)
+            logger.error("Unsuccessful sending Nack to $clientId. StatusCode: {}", pubStatus)
     }
 
     fun registerFunctions(functions: Set<GeoFaaSFunction>, fence: Geofence): StatusCode { //FIXME: should update CALL subscriptions in geoBroker when remote FaaS added/removed serving function

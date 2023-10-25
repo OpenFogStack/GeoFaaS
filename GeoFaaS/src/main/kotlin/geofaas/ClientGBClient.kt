@@ -16,54 +16,48 @@ import org.apache.logging.log4j.LogManager
 
 class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "ClientGeoFaaS1", private val ackTimeout: Int = 8000, private val resTimeout: Int = 3000): GeoBrokerClient(loc, ClientType.CLIENT, debug, host, port, id) {
     private val logger = LogManager.getLogger()
-    fun callFunction(funcName: String, data: String, radiusDegree: Double = 0.1): FunctionMessage? {
+    private val getAckAttempts = 2
+    fun callFunction(funcName: String, data: String, retries: Int = 0, radiusDegree: Double = 0.1): FunctionMessage? {
+        if(retries < 0) return null
         logger.info("calling '$funcName' function with following param: '$data'")
         val pubFence = Geofence.circle(location, radiusDegree)
         val subFence = Geofence.circle(location, radiusDegree) // subFence is better to be as narrow as possible (if the client is not moving, zero)
         // Subscribe for the response
         val subTopics: MutableSet<ListeningTopic>? = subscribeFunction(funcName, subFence)
         if (subTopics == null) // if success, it is either empty or contains newly subscribed functions
-            logger.warn("Failed to subscribe to /result and /ack. Could be a wrong broker, continuing...")
+            logger.warn("Failed to subscribe to /result and /ack. Assume calling to a wrong broker, continuing...")
 
         // Call the function
         val responseTopicFence = ResponseInfoPatched(id, Topic("functions/$funcName/result"), subFence.toJson())
         val message = gson.toJson(FunctionMessage(funcName, FunctionAction.CALL, data, TypeCode.NORMAL, "GeoFaaS", responseTopicFence))
         basicClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call"), pubFence, message))
-        val pubAck = basicClient.receiveWithTimeout(ackTimeout) // TODO: replace with 'listenForPubAckAndProcess()'
-        val pubStatus = processPublishAckSuccess(pubAck, funcName, FunctionAction.CALL, true)
-        if (pubStatus != StatusCode.Success && pubStatus != StatusCode.WrongBroker) return null
+        val pubStatus = listenForPubAckAndProcess(FunctionAction.CALL, funcName, ackTimeout)
+        if (pubStatus.first != StatusCode.Success && pubStatus.first != StatusCode.WrongBroker) return null
 
         var res: FunctionMessage? = null
-        when (pubStatus) {
+        when (pubStatus.first) {
             StatusCode.WrongBroker -> { // published to a wrong broker
-                if(pubAck is Payload.DISCONNECTPayload) { // smart cast not available
-                    val changeStatus = changeBroker(pubAck.brokerInfo!!) // processPublishAckSuccess() returns WrongBroker only if there is a brokerInfo
-                    if (changeStatus == StatusCode.Success) {
-                        // TODO move all the subscriptions to the new broker? isn't needed now
-                        val resultTopic = Topic("functions/$funcName/result")
-                        var newSubscribeStatus: StatusCode
-                        do {
-                            newSubscribeStatus = subscribe(resultTopic, subFence)
-                        } while(newSubscribeStatus == StatusCode.Retry)
-                        if(newSubscribeStatus == StatusCode.Failure)
-                            throw RuntimeException("Failed to subscribe to '$resultTopic'" )
-                        else // either Success or AlreadyExist
-                             listeningTopics.add(ListeningTopic(resultTopic, subFence))
-                        res = listenForResult(resTimeout)
-                    } else
-                        throw RuntimeException("Failed to switch the broker. StatusCode: $changeStatus" )
-                }
+                val changeStatus = changeBroker(pubStatus.second!!) // processPublishAckSuccess() returns WrongBroker only if there is a brokerInfo
+                if (changeStatus == StatusCode.Success) {
+                    // TODO move all the subscriptions to the new broker? isn't needed now
+                    val resultTopic = Topic("functions/$funcName/result")
+                    val newSubscribeStatus: StatusCode = subscribe(resultTopic, subFence) // fast forward subscribeFunction() process
+                    if(newSubscribeStatus == StatusCode.Failure)
+                        throw RuntimeException("Failed to subscribe to '$resultTopic'. StatusCode: $newSubscribeStatus")
+                    res = listenForResult(resTimeout)
+                } else
+                    throw RuntimeException("Failed to switch the broker. StatusCode: $changeStatus" )
             }
             else -> {
                 // Wait for GeoFaaS's response (Ack)
-                var retryCount = 3
+                var getAckAttempts = getAckAttempts
                 var ackSender :String?
                 do {
-                    ackSender = listenForAck(ackTimeout) // blocking
-                    retryCount--
+                    ackSender = listenForAck(ackTimeout) // blocking, with timeout
+                    getAckAttempts--
                     if (ackSender == null)
-                        logger.info("attempts remained for getting the ack: {}", retryCount)
-                } while (ackSender == null && retryCount > 0) // retry
+                        logger.info("attempts remained for getting the ack: {}", getAckAttempts)
+                } while (ackSender == null && getAckAttempts > 0) // retry
 
                 // wait for the result from the GeoFaaS
                 if (ackSender != null){
@@ -77,9 +71,12 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
             logger.info("cleaned subscriptions for '$funcName' call (${unSubscribedTopics.size} in total)")
         else
             logger.error("problem with cleaning subscriptions after calling '$funcName'")
-        return res
-//        logger.error("Call function failed! Failed to subscribe to /result and /ack")
-//        return null
+
+        return if (res == null){
+            logger.warn("Retrying '$funcName($data)' call")
+            callFunction(funcName, data, retries -1, radiusDegree)
+        } else
+            res
     }
 
     // Returns the ack's sender id or null

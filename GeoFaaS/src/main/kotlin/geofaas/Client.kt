@@ -1,5 +1,6 @@
 package geofaas
 
+import de.hasenburg.geobroker.commons.model.disgb.BrokerInfo
 import de.hasenburg.geobroker.commons.model.spatial.Location
 import de.hasenburg.geobroker.commons.sleepNoLog
 import geofaas.Model.FunctionMessage
@@ -14,27 +15,17 @@ class Client (loc: Location, debug: Boolean, host: String, port: Int, id: String
     val id
         get() = gbClient.id
 
-    fun moveTo(loc: Location): StatusCode {
-        var updateStatus: StatusCode
-        do{
-            updateStatus = gbClient.updateLocation(loc).first
-        } while(updateStatus == StatusCode.Retry)
-        return updateStatus
+    fun moveTo(loc: Location): Pair<StatusCode, BrokerInfo?> {
+        return gbClient.updateLocation(loc)
     }
 
     fun call(funcName: String, param: String): String? {
-        var retries = 1 //2
-        var result: FunctionMessage?
-        do{
-            result = gbClient.callFunction(funcName, param, 0.1)
-            retries--
-            if (result == null)
-                logger.info("Call failed. attempts remained for getting the result: {}", retries)
-        } while(result == null && retries > 0)
+        val retries = 2 //2
+        val result: FunctionMessage? = gbClient.callFunction(funcName, param, retries, 0.1)
         if (result == null)
-            logger.error("No result received after retries!")
+            logger.error("No result received after {} retries!", retries)
 
-        logger.debug("client gb id: {}", gbClient.basicClient.identity)
+        logger.debug("my geoBroker client id: {}", gbClient.basicClient.identity)
         return result?.data
     }
 
@@ -94,6 +85,13 @@ val brokerAddresses = mapOf("Frankfurt" to "141.23.28.205",
 suspend fun main() {
 
     val debug = true
+//    val client = Client(locFranceToPoland.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "ClientGeoFaaS1")
+//    val res: String? = client.call("sieve", client.id)
+//    if(res != null) println("${client.id} Result: $res")
+//    else println("${client.id}: NOOOOOOOOOOOOOOO Response!")
+//    client.shutdown()
+//    println("${client.id} finished!")
+    ////////////////////////////////// multiple Moving Clients //////////////////////
     val clientLocPairs = mutableListOf<Pair<Client, List<Pair<String,Location>>>>()
     clientLocPairs.add(Client(locFranceToPoland.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "ClientGeoFaaS1") to locFranceToPoland)
     clientLocPairs.add(Client(locBerlinToFrance.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "ClientGeoFaaS2") to locBerlinToFrance)

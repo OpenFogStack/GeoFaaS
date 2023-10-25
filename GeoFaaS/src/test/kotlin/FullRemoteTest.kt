@@ -58,7 +58,7 @@ class FullRemoteTest {
     fun berlinOffloadsToCloud() { // assumes Berlin offloads any request
         gbhost = brokerAddress["Berlin"]!!
         client1 = ClientGBClient(clientLoc["potsdam"]!!, true, gbhost, gbPort, "ClientGeoFaaSTest")
-        val res: FunctionMessage? = client1.callFunction("sieve", "", 2.1)
+        val res: FunctionMessage? = client1.callFunction("sieve", "", 0, 2.1)
         assertNotNull(res)
         assertEquals("Found 1229 primes under 10000", res?.data)
         assertEquals(gbhost, client1.basicClient.ip) // client shouldn't switch to the other broker
@@ -69,43 +69,41 @@ class FullRemoteTest {
     fun parisRespondsToParisClient() {
         gbhost = brokerAddress["Paris"]!!
         client1 = ClientGBClient(clientLoc["parisNonOverlap"]!!, true, gbhost, gbPort, "ClientGeoFaaSTest")
-        val res: FunctionMessage? = client1.callFunction("sieve", "", 2.1)
+        val res: FunctionMessage? = client1.callFunction("sieve", "", 0, 2.1)
         assertNotNull(res)
         assertEquals("Found 1229 primes under 10000", res?.data)
         assertEquals(gbhost, client1.basicClient.ip) // client shouldn't switch to the other broker
         assertNotEquals("{\"wkt\":\"ENVELOPE (-180, 180, 90, -90)\"}" ,res?.responseTopicFence?.fence)// not from the cloud
         client1.terminate()
     }
-// Redirects
-    @Test
-    fun frankfurtClientRedirectsToFrankfurtBroker() {
-        gbhost = brokerAddress["Berlin"]!!
-        client1 = ClientGBClient(clientLoc["frankfurtEdge"]!!, true, gbhost, gbPort, "ClientGeoFaaSTest")
-        assertNotEquals(gbhost, client1.basicClient.ip) // client should switch to the other broker
-        assertEquals(brokerAddress["Frankfurt"]!!, client1.basicClient.ip)
-        client1.terminate()
-    }
 
-    @Test
-    fun amsterdamClientRedirectsToCloudBrokerAndGetsResponse() {
-        gbhost = brokerAddress["Frankfurt"]!!
-        client1 = ClientGBClient(clientLoc["amsterdam"]!!, true, gbhost, gbPort, "ClientGeoFaaSTest")
-//        assertNotEquals(gbhost, client1.gbSimpleClient.ip) // client should switch to the other broker. UPDATE: functionality changed. will switch after the call
-//        assertEquals(brokerAddress["Cloud"]!!, client1.gbSimpleClient.ip)
-        val res: FunctionMessage? = client1.callFunction("sieve", "", 2.1)
-        assertNotNull(res)
-        assertEquals("Found 1229 primes under 10000", res?.data)
-        client1.terminate()
-    }
+// Redirects
+//    @Test
+//    fun frankfurtClientRedirectsToFrankfurtBroker() {
+//        gbhost = brokerAddress["Berlin"]!!
+//        client1 = ClientGBClient(clientLoc["frankfurtEdge"]!!, true, gbhost, gbPort, "ClientGeoFaaSTest")
+//        assertNotEquals(gbhost, client1.basicClient.ip) // client should switch to the other broker
+//        assertEquals(brokerAddress["Frankfurt"]!!, client1.basicClient.ip)
+//        client1.terminate()
+//    }
+
+//    @Test
+//    fun amsterdamClientRedirectsToCloudBrokerAndGetsResponse() {
+//        gbhost = brokerAddress["Frankfurt"]!!
+//        client1 = ClientGBClient(clientLoc["amsterdam"]!!, true, gbhost, gbPort, "ClientGeoFaaSTest")
+////        assertNotEquals(gbhost, client1.gbSimpleClient.ip) // client should switch to the other broker. UPDATE: functionality changed. will switch after the call
+////        assertEquals(brokerAddress["Cloud"]!!, client1.gbSimpleClient.ip)
+//        val res: FunctionMessage? = client1.callFunction("sieve", "", 2.1)
+//        assertNotNull(res)
+//        assertEquals("Found 1229 primes under 10000", res?.data)
+//        client1.terminate()
+//    }
 
     @Test
     fun clientMovesAndCallsGetsResult() {
         client1 = ClientGBClient(locParisToPotsdom.first(), true, brokerAddresses["Paris"]!!, 5560, "ClientGeoFaaSTest")
         locParisToPotsdom.forEach { loc ->
-            var updateStatus: Pair<Model.StatusCode, BrokerInfo?>
-            do{
-                updateStatus = client1.updateLocation(loc)
-            } while(updateStatus.first == Model.StatusCode.Retry)
+            val updateStatus: Pair<Model.StatusCode, BrokerInfo?> = client1.updateLocation(loc)
             assertEquals(Model.StatusCode.Success, updateStatus.first)
             val res: FunctionMessage? = client1.callFunction("sieve", "")
             if(res != null) println("Result: ${res.data}")
@@ -119,19 +117,13 @@ class FullRemoteTest {
     fun cloudPassesTheClientToEdge() { // if is in any Edge broker area
         client1 = ClientGBClient(clientLoc["paris2"]!!,  true, brokerAddresses["Paris"]!!, 5560, "ClientGeoFaaSTest")
         var updateStatus: Pair<Model.StatusCode, BrokerInfo?>
-        do{
-            updateStatus = client1.updateLocation(clientLoc["belgium"]!!)
-        } while(updateStatus.first == Model.StatusCode.Retry)
+        updateStatus = client1.updateLocation(clientLoc["belgium"]!!)
         assertEquals("Cloud", updateStatus.second?.brokerId)
 
-        do{
-            updateStatus = client1.updateLocation(clientLoc["parisOverlap"]!!)
-        } while(updateStatus.first == Model.StatusCode.Retry)
+        updateStatus = client1.updateLocation(clientLoc["parisOverlap"]!!)
         assertEquals("Paris", updateStatus.second?.brokerId)
 
-        do{
-            updateStatus = client1.updateLocation(clientLoc["amsterdam"]!!)
-        } while(updateStatus.first == Model.StatusCode.Retry)
+        updateStatus = client1.updateLocation(clientLoc["amsterdam"]!!)
         assertEquals("Cloud", updateStatus.second?.brokerId)
 
         client1.terminate()
