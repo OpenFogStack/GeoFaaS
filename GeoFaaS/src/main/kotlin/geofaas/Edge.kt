@@ -3,6 +3,7 @@ package geofaas
 import de.hasenburg.geobroker.commons.model.spatial.Geofence
 import de.hasenburg.geobroker.commons.model.spatial.Location
 import de.hasenburg.geobroker.commons.model.spatial.toGeofence
+import de.hasenburg.geobroker.commons.sleepNoLog
 import io.ktor.client.call.*
 import org.apache.logging.log4j.LogManager
 import geofaas.Model.FunctionAction
@@ -18,7 +19,7 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
     // returns ture if success to Subscribe to all the functions
 
     suspend fun registerFaaS(tf: TinyFaasClient): StatusCode {
-        val funcs: Set<GeoFaaSFunction> = tf.functions()
+        val funcs: Set<GeoFaaSFunction> = tf.remoteFunctions()!! //.functions()
         if (funcs.isNotEmpty()) {
             val registerSuccess = gbClient.registerFunctions(funcs, gbClient.brokerAreaManager.ownBrokerArea.coveredArea)
             return if (registerSuccess == StatusCode.Success) {
@@ -45,7 +46,7 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
                 gbClient.sendAck(newMsg.funcName, clientFence, newMsg.responseTopicFence.senderId) // tell the client you received its request
                 val registeredFunctionsName: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
                 if (newMsg.funcName in registeredFunctionsName){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
-                    val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName)
+                    val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName, null)
                     val response = selectedFaaS.call(newMsg.funcName, newMsg.data)
                     logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
 
@@ -55,11 +56,15 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
                         gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.responseTopicFence.senderId)
                         logger.info("${gbClient.id}: sent the result '{}' to functions/${newMsg.funcName}/result", responseBody) // wiki: Found 1229 primes under 10000
                     } else { // connection refused?
-                        logger.error("No response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}'")
+//                        val selectedFaaS2: TinyFaasClient = bestAvailFaaS(newMsg.funcName, listOf(selectedFaaS)) // 2nd best faas
+//                        val response2 = selectedFaaS.call(newMsg.funcName, newMsg.data)
+//                        logger.debug("FaaS's raw Response: {}", response2)
+                        //TODO call another FaaS and if there is no more FaaS serving the func, offload
+                        logger.error("No response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}' Offloading to cloud...")
                         gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence, newMsg.responseTopicFence.senderId, "GeoFaaS-Cloud")
                     }
                 } else {
-                    logger.fatal("No FaaS is serving the '${newMsg.funcName}' function!")
+                    logger.fatal("No FaaS is serving the '${newMsg.funcName}' function! Offloading to cloud...")
                     gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence, newMsg.responseTopicFence.senderId, "GeoFaaS-Cloud")
                 }
             } else {
@@ -71,9 +76,13 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
         gbClient.terminate()
         faasRegistry.clear()
     }
-    private fun bestAvailFaaS(funcName: String): TinyFaasClient {
+    private fun bestAvailFaaS(funcName: String, except: List<TinyFaasClient>?): TinyFaasClient {
         val availableServers: List<TinyFaasClient> = faasRegistry.filter { tf -> tf.isServingFunction(funcName) }
-        return availableServers.first() // TODO: choose between FaaS servers
+        if (except == null)
+            return availableServers.first() // TODO: choose between FaaS servers
+        else {
+            return availableServers.filter { tf -> !except.contains(tf) }.first()
+        }
     }
 }
 

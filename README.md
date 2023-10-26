@@ -117,3 +117,4 @@ GeoFaaS is independent of the FaaS module. tinyFaaS could be replaced by any Faa
 - the debug logs/comments I added can be found by searching for `>>>` and `//\\` 
 - Client's call has a retry for result before it fails
 - The "Cloud" broker prefers passing clients to the responsible Edge broker, if any 
+- GeoFaaS assumes the list of deployed functions on the FaaS doesn't change after initialization and are already deployed, however, it has the ability to update the functions

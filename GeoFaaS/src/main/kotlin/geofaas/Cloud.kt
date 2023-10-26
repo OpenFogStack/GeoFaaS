@@ -18,9 +18,9 @@ class Cloud(loc: Location, debug: Boolean, host: String = "localhost", port: Int
     private var faasRegistry = mutableListOf<TinyFaasClient>()
 
     suspend fun registerFaaS(tf: TinyFaasClient): StatusCode {
-        val funcs: Set<GeoFaaSFunction> = tf.functions()
+        val funcs: Set<GeoFaaSFunction> = tf.remoteFunctions()!! //.functions()
         if (funcs.isNotEmpty()) {
-            val registerSuccess = gbClient.registerFunctions(funcs, Geofence.world())
+            val registerSuccess = gbClient.registerFunctions(funcs, gbClient.brokerAreaManager.ownBrokerArea.coveredArea) // == Geofence.world()
             return if (registerSuccess == StatusCode.Success) {
                 logger.info("new FaaS's functions have been registered")
                 faasRegistry += tf
@@ -45,7 +45,7 @@ class Cloud(loc: Location, debug: Boolean, host: String = "localhost", port: Int
 //                gbClient.sendAck(newMsg.funcName, clientFence) // tell the client you received its request
                 val registeredFunctionsName: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
                 if (newMsg.funcName in registeredFunctionsName){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
-                    val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName)
+                    val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName, null)
                     val response = selectedFaaS.call(newMsg.funcName, newMsg.data)
                     logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
 
@@ -65,7 +65,7 @@ class Cloud(loc: Location, debug: Boolean, host: String = "localhost", port: Int
                 gbClient.sendAck(newMsg.funcName, clientFence, newMsg.responseTopicFence.senderId) // tell the client you received its request
                 val registeredFunctionsName: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
                 if (newMsg.funcName in registeredFunctionsName){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
-                    val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName)
+                    val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName, null)
                     val response = selectedFaaS.call(newMsg.funcName, newMsg.data)
                     logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
 
@@ -93,9 +93,13 @@ class Cloud(loc: Location, debug: Boolean, host: String = "localhost", port: Int
         gbClient.terminate()
         faasRegistry.clear()
     }
-    private fun bestAvailFaaS(funcName: String): TinyFaasClient {
+    private fun bestAvailFaaS(funcName: String, except: List<TinyFaasClient>?): TinyFaasClient {
         val availableServers: List<TinyFaasClient> = faasRegistry.filter { tf -> tf.isServingFunction(funcName) }
-        return availableServers.first() // TODO: choose between FaaS servers
+        if (except == null)
+            return availableServers.first() // TODO: choose between FaaS servers
+        else {
+            return availableServers.filter { tf -> !except.contains(tf) }.first()
+        }
     }
 }
 

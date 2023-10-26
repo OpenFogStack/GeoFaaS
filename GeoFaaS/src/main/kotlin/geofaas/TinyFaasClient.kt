@@ -18,7 +18,7 @@ import kotlin.math.log
 class TinyFaasClient (val host: String, val port: Int, private var functionsLocal: Set<GeoFaaSFunction> = mutableSetOf()) {
      // Note: this is local
     private val logger = LogManager.getLogger()
-    //FIXME: on init: check host:port if tinyFaaS is online and 'connection refused' won't happen
+    //FIXME: on init: check host:port if tinyFaaS is online and handle 'connection refused'
     private val client: HttpClient = HttpClient(CIO) { // CIO is an asynchronous coroutine-based engine
         //expectSuccess = true // expectSuccess is a resp validation
         install(Logging)
@@ -40,9 +40,9 @@ class TinyFaasClient (val host: String, val port: Int, private var functionsLoca
         }
     }
 
-    suspend fun functions() : Set<GeoFaaSFunction> { // NOTE: could cause performance issue later
-        //TODO: should update (append/remove) CALL subscriptions in geoBroker
-        functionsLocal = remoteFunctions() ?: throw RuntimeException("can't get functions list! is the remote tinyFaaS running?")
+    fun functions() : Set<GeoFaaSFunction> { // NOTE: could cause performance issue later
+        //TODO: should update (append/remove) CALL subscriptions in geoBrokerClient
+//        functionsLocal = remoteFunctions() ?: throw RuntimeException("can't get functions list! is the remote tinyFaaS running?")
         return functionsLocal
     }
     fun isServingFunction(funcName: String): Boolean {
@@ -55,7 +55,10 @@ class TinyFaasClient (val host: String, val port: Int, private var functionsLoca
             val resp = client.get("http://$host:8080/list")
             val body = resp.body<String>()
             val funcs = body.split("\n").filter { it.isNotBlank() }
-            return funcs.map { name -> GeoFaaSFunction(name) }.toSet()
+            val gfFunction = funcs.map { name -> GeoFaaSFunction(name) }.toSet()
+            functionsLocal = gfFunction // update cache
+            logger.debug("functionsLocal updated. dump: {}", functionsLocal)
+            return gfFunction
         }
         catch (e: Throwable) {
             logger.fatal("Error when requesting the list of functions from '$host:8080'. $e")
