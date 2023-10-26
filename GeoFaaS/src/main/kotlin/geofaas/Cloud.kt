@@ -3,6 +3,7 @@ package geofaas
 import de.hasenburg.geobroker.commons.model.spatial.Geofence
 import de.hasenburg.geobroker.commons.model.spatial.Location
 import de.hasenburg.geobroker.commons.model.spatial.toGeofence
+import de.hasenburg.geobroker.commons.sleepNoLog
 import io.ktor.client.call.*
 import org.apache.logging.log4j.LogManager
 import geofaas.Model.FunctionAction
@@ -40,6 +41,7 @@ class Cloud(loc: Location, debug: Boolean, host: String = "localhost", port: Int
     suspend fun handleNextRequest() {
         val newMsg :FunctionMessage? = gbClient.listenForFunction("CALL or NACK", 0) // blocking
         if (newMsg != null) {
+            sleepNoLog(1000, 0) // Note: some delay for the cloud?
             val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
             if (newMsg.funcAction == FunctionAction.NACK) {
 //                gbClient.sendAck(newMsg.funcName, clientFence) // tell the client you received its request
