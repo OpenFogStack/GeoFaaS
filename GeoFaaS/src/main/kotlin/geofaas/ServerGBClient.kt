@@ -41,7 +41,7 @@ class ServerGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
     // publishes a NotAck to offload to the cloud. the cloud listening for it
     fun sendNack(funcName: String, data: String, clientFence: Geofence, clientId: String, cloudId: String, cloudFence: Geofence = Geofence.circle(Location(0.0, 0.0), 0.1)) {
         val responseTopicFence = ResponseInfoPatched(clientId, Topic("functions/$funcName/result"), clientFence.toJson())
-        val message = FunctionMessage(funcName, FunctionAction.NACK, data, TypeCode.PIGGY, cloudId, responseTopicFence)
+        val message = FunctionMessage(funcName, FunctionAction.NACK, data, TypeCode.NORMAL, cloudId, responseTopicFence)
         basicClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/nack"), cloudFence, gson.toJson(message)))
         val pubStatus = listenForPubAckAndProcess(FunctionAction.NACK, funcName, 8000)
         if (pubStatus.first == StatusCode.Failure) logger.error("failed to offload $funcName call by $clientId. Is $cloudId online?")
@@ -72,7 +72,7 @@ class ServerGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
                 return StatusCode.Success
             }
             else -> {
-                logger.fatal("Unexpected! '$id' of type 'geoFaasType' can't access registerFunction()")
+                logger.fatal("Unexpected! '$id' of type '$mode' can't access registerFunction()")
                 return StatusCode.Failure
             }
         }

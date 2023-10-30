@@ -85,16 +85,19 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                 val ackSubscribe: StatusCode = subscribe(ackTopic, fence)
                 if (ackSubscribe == StatusCode.Success) { newTopics.add(ListeningTopic(ackTopic, fence)) }
             }
-            if (mode == ClientType.CLOUD) { // Cloud subscribes to two topics
+            if (mode == ClientType.CLOUD) { // Cloud subscribes to three topics
                 val nackTopic = Topic("functions/$funcName/nack")
                 val nackSubscribe: StatusCode = subscribe(nackTopic, fence)
                 if (nackSubscribe == StatusCode.Success) { newTopics.add(ListeningTopic(nackTopic, fence)) }
+                val retryTopic = Topic("functions/$funcName/call/retry")
+                val retrySubscribe: StatusCode = subscribe(retryTopic, fence)
+                if (retrySubscribe == StatusCode.Success) { newTopics.add(ListeningTopic(retryTopic, fence)) }
             }
             return if (newTopics.isNotEmpty()) {
-                logger.debug("ListeningTopics appended by ${newTopics.size}: {}", newTopics)
+                logger.info("ListeningTopics appended by ${newTopics.size}: {}", newTopics.map { it.topic.topic })
                 newTopics // for error handling purposes
             } else {
-                logger.debug("ListeningTopics didn't change. Nothing subscribed new!")
+                logger.info("ListeningTopics didn't change. Nothing subscribed new!")
                 mutableSetOf<ListeningTopic>()
             }
         } else
@@ -161,16 +164,19 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             val ackUnsubscribe: StatusCode = unsubscribe(ackTopic)
             if (ackUnsubscribe == StatusCode.Success) { deletedTopics.add(ackTopic) }
         }
-        if (mode == ClientType.CLOUD) { // Cloud subscribes to two topics
+        if (mode == ClientType.CLOUD) { // Cloud subscribes to three topics
             val nackTopic = Topic("functions/$funcName/nack")
             val nackUnsubscribe: StatusCode = unsubscribe(nackTopic)
             if (nackUnsubscribe == StatusCode.Success) { deletedTopics.add(nackTopic) }
+            val retryTopic = Topic("functions/$funcName/call/retry")
+            val retryUnsubscribe: StatusCode = unsubscribe(nackTopic)
+            if (retryUnsubscribe == StatusCode.Success) { deletedTopics.add(retryTopic) }
         }
         return if (deletedTopics.isNotEmpty()) {
             logger.debug("ListeningTopics decreased by ${deletedTopics.size}: {}", deletedTopics.map { it.topic })
             deletedTopics // for error handling purposes
         } else {
-            logger.debug("Nothing unsubscribed new for '$funcName' function!")
+            logger.info("Nothing unsubscribed new for '$funcName' function!")
             mutableSetOf<Topic>()
        }
     }
@@ -229,16 +235,16 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         val msg: Payload?
         val dequeuedPub = pubQueue.poll()
         if (dequeuedPub == null) {
-            logger.info("Listening to the geoBroker server for a '$type'...")
+            logger.info("Listening for a GeoFaaS '$type'...")
             msg = when (timeout){
                 0 -> basicClient.receive() // blocking
                 else -> basicClient.receiveWithTimeout(timeout) // returns null after expiry
             }
             if (timeout > 0 && msg == null) {
-                logger.error("Listening timeout (${timeout}ms)!")
+                logger.error("Listening timeout (${timeout}ms)! pubQueue size:{}", pubQueue.size)
                 return null
             }
-            logger.debug("EVENT from geoBroker: {}", msg)
+            logger.debug("gB EVENT: {}", msg)
         } else {
             msg = dequeuedPub
             logger.debug("Pub queue's size is ${pubQueue.size}. dequeued: {}", dequeuedPub)
@@ -295,7 +301,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         val pubAck = if (ackQueue.peek() is Payload.PINGRESPPayload) ackQueue.remove() else basicClient.receiveWithTimeout(8000)
         logger.debug("ping ack: {}", pubAck) //DISCONNECTPayload(reasonCode=WrongBroker, brokerInfo=BrokerInfo(brokerId=Frankfurt, ip=localhost, port=5559)
         if(pubAck is Payload.DISCONNECTPayload) {
-            logger.warn("moved outside of the current broker's area.")
+            logger.info("moved outside of the current broker's area.")
             if (pubAck.reasonCode == ReasonCode.WrongBroker){ // you are now outside my area
                 location = newLoc // update the local, as the current broker is no longer responsible for us
                 if (pubAck.brokerInfo != null) {
@@ -350,7 +356,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         logger.warn("changing the remote broker to $newBroker...")
         val oldBroker = basicClient
         var clientId = basicClient.identity // Note: GeoBrokerClient.id never changes
-        visitedBrokers.add(Pair(basicClient.ip, basicClient.port))
+        visitedBrokers.add(Pair(basicClient.ip, basicClient.port)) // already connected broker
         if ( visitedBrokers.contains(Pair(newBroker.ip, newBroker.port)) ){
             logger.debug("clearing visitedBrokers with size of {}", visitedBrokers.size)
             visitedBrokers.clear()
@@ -370,7 +376,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             listeningTopics.clear()
             ackQueue.clear()
             pubQueue.clear()
-            logger.info("cleared queues and listeningTopics")
+            logger.debug("cleared queues and listeningTopics")
             return StatusCode.Success
         } else { // TODO handle 'StatusCode.WrongBroker', and reconnect to the correct broker
             logger.error("failed to change the remote broker to: ${newBroker.brokerId}. Thus, remote geobroker is not changed")
@@ -418,7 +424,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
     }
     // Returns Success, Failure, WrongBroker, and Retry
     protected fun processPublishAckSuccess(pubAck: Payload?, funcName: String, funcAct: FunctionAction, withTimeout: Boolean): Pair<StatusCode, BrokerInfo?> {
-        val logMsg = "GeoBroker's 'Publish ACK' for the '$funcName' $funcAct by '$id': {}"
+        val logMsg = "'$funcName' $funcAct Pub confirmation: {}"
         if (pubAck is Payload.PUBACKPayload) {
             val noError = logPublishAck(pubAck, logMsg) // logs the reasonCode
             if (noError) return Pair(StatusCode.Success, null)
@@ -426,7 +432,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         } else if(pubAck is Payload.DISCONNECTPayload && pubAck.brokerInfo != null)
             return Pair(StatusCode.WrongBroker, pubAck.brokerInfo) // disconnect payload when publishing to a wrong broker
           else if (pubAck == null && withTimeout) {
-            logger.error("Timeout! no 'Publish ACK' received for '$funcName' $funcAct by '$id'")
+            logger.error("Timeout! no 'Publish ACK' received for '$funcName' $funcAct by '$id'. ackQueue size: {}", ackQueue.size)
         } else if (pubAck is Payload.PUBLISHPayload) {
             val message = gson.fromJson(pubAck.content, FunctionMessage::class.java)
             if (message.receiverId == id) {

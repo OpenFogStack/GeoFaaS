@@ -105,7 +105,7 @@ GeoFaaS is independent of the FaaS module. tinyFaaS could be replaced by any Faa
 - The `/call` from any entity is only forwarded to potential brokers if no local subscriber exists  
 - The GeoFaaS-Cloud's subscription geofence is the world, therefore it is responsible for requests. Hence, its Location is 0.0:0.0
 - The broker areas don't overlap, that means for a client there is only one responsible GeoFaaS server 
-- GeFaaS-Cloud subscribes to both `/call` (for clients that are far from any Edge server) and `/nack` (for offloading)
+- GeFaaS-Cloud subscribes to both `/call` (for clients that are far from any Edge server) and `/nack` (for offloading), also `/call/retry/` to directly call the cloud when Edge GeoFaaS is running but not responding
 - GeoFaaS-Edge subscribes only to `/call`s
 - ClientGeoFaaS subscribes to `/result` and `/ack` around itself when calls a function
 - GeoFaaS servers (Edge/Cloud) have a name starting with "GeoFaaS-", and when publishing, they fake their location to client location (middle of the publish fence)  
@@ -117,4 +117,7 @@ GeoFaaS is independent of the FaaS module. tinyFaaS could be replaced by any Faa
 - the debug logs/comments I added can be found by searching for `>>>` and `//\\` 
 - Client's call has a retry for result before it fails
 - The "Cloud" broker prefers passing clients to the responsible Edge broker, if any 
+- The Cloud has a 1sec delay responding
 - GeoFaaS assumes the list of deployed functions on the FaaS doesn't change after initialization and are already deployed, however, it has the ability to update the functions
+- There are global values `retries` (for result) `getAckAttempts`, `ackTimeout`, `resTimeout` for ClientGBClient that can be tuned
+- The client's call retry priority starts with receiving publish Ack, then receiving GeoFaaS's Ack, then GeoFaaS's Result, if all failed, calling the cloud directly via "functions/f1/call/retry" 
