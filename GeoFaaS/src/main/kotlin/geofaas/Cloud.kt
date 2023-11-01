@@ -11,6 +11,10 @@ import geofaas.Model.GeoFaaSFunction
 import geofaas.Model.ClientType
 import geofaas.Model.FunctionMessage
 import geofaas.Model.StatusCode
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlin.system.measureTimeMillis
 
 // Cloud Subs to Nack and Call with fence.world()
 class Cloud(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaS-Cloud", brokerAreaManager: BrokerAreaManager) {
@@ -38,55 +42,63 @@ class Cloud(loc: Location, debug: Boolean, host: String = "localhost", port: Int
         }
     }
 
-    suspend fun handleNextRequest() {
-        val newMsg :FunctionMessage? = gbClient.listenForFunction("CALL or NACK", 0) // blocking
-        if (newMsg != null) {
-            sleepNoLog(1000, 0) // Note: some delay for the cloud?
-            val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
-            if (newMsg.funcAction == FunctionAction.NACK) {
-//                gbClient.sendAck(newMsg.funcName, clientFence) // tell the client you received its request
-                val registeredFunctionsName: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
-                if (newMsg.funcName in registeredFunctionsName){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
-                    val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName, null)
-                    val response = selectedFaaS.call(newMsg.funcName, newMsg.data)
-                    logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
+    // returns run time
+    suspend fun handleNextRequest(): Long {
+        val newMsg :FunctionMessage? = gbClient.listenForFunction("CALL(/retry) or NACK", 0) // blocking
+        return measureTimeMillis {
+            if (newMsg != null) {
+                if (newMsg.typeCode == Model.TypeCode.RETRY) logger.warn("received a retry call from ${newMsg.responseTopicFence.senderId}")
+                //sleepNoLog(1000, 0) // Note: some delay for the cloud?
+                val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
+                if (newMsg.funcAction == FunctionAction.NACK) {
+    //                gbClient.sendAck(newMsg.funcName, clientFence) // tell the client you received its request
+                    val registeredFunctionsName: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
+                    if (newMsg.funcName in registeredFunctionsName){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
+                        val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName, null)
+                        val response = selectedFaaS.call(newMsg.funcName, newMsg.data)
+                        logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
 
-                    if (response != null) {
-                        val responseBody: String = response.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
-                        gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.responseTopicFence.senderId)
-                        logger.info("${gbClient.id}: sent the result '{}' to functions/${newMsg.funcName}/result", responseBody) // wiki: Found 1229 primes under 10000
-                    } else { // connection refused?
-                        logger.error("No response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}'")
-//                        gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence)
+                        if (response != null) {
+                            val responseBody: String = response.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
+    //                        GlobalScope.launch{
+                            gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.responseTopicFence.senderId)
+                            logger.info("Sent the result '{}' to functions/${newMsg.funcName}/result for {}", responseBody, newMsg.responseTopicFence.senderId) // wiki: Found 1229 primes under 10000
+    //                        }
+                        } else { // connection refused?
+                            logger.error("No response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}'")
+    //                        gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence)
+                        }
+                    } else {
+                        logger.fatal("No FaaS is serving the '${newMsg.funcName}' function!")
+    //                    gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence)
                     }
-                } else {
-                    logger.fatal("No FaaS is serving the '${newMsg.funcName}' function!")
-//                    gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence)
-                }
-            } else if(newMsg.funcAction == FunctionAction.CALL) { // behave same as Edge
-                gbClient.sendAck(newMsg.funcName, clientFence, newMsg.responseTopicFence.senderId) // tell the client you received its request
-                val registeredFunctionsName: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
-                if (newMsg.funcName in registeredFunctionsName){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
-                    val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName, null)
-                    val response = selectedFaaS.call(newMsg.funcName, newMsg.data)
-                    logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
+                } else if(newMsg.funcAction == FunctionAction.CALL) { // behave same as Edge, also listening to '/retry'
+                    gbClient.sendAck(newMsg.funcName, clientFence, newMsg.responseTopicFence.senderId) // tell the client you received its request
+                    val registeredFunctionsName: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
+                    if (newMsg.funcName in registeredFunctionsName){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
+                        val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName, null)
+                        val response = selectedFaaS.call(newMsg.funcName, newMsg.data)
+                        logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
 
-                    if (response != null) {
-                        val responseBody: String = response.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
-                        gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.responseTopicFence.senderId)
-                        logger.info("${gbClient.id}: sent the result '{}' to functions/${newMsg.funcName}/result", responseBody) // wiki: Found 1229 primes under 10000
-                    } else { // connection refused?
-                        logger.error("No response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}'")
+                        if (response != null) {
+                            val responseBody: String = response.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
+    //                        GlobalScope.launch {
+                            gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.responseTopicFence.senderId)
+                            logger.info("Sent the result '{}' to functions/${newMsg.funcName}/result for {}", responseBody, newMsg.responseTopicFence.senderId) // wiki: Found 1229 primes under 10000
+    //                        }
+                        } else { // connection refused?
+                            logger.error("No response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}'")
+                            logger.error("The Client will NOT receive any response! This is end of the line of offloading")
+    //                        gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence)
+                        }
+                    } else {
+                        logger.fatal("No FaaS is serving the '${newMsg.funcName}' function!")
                         logger.error("The Client will NOT receive any response! This is end of the line of offloading")
-//                        gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence)
+    //                    gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence)
                     }
                 } else {
-                    logger.fatal("No FaaS is serving the '${newMsg.funcName}' function!")
-                    logger.error("The Client will NOT receive any response! This is end of the line of offloading")
-//                    gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence)
+                    logger.error("The new request is not a NACK nor a CALL, but a ${newMsg.funcAction}!")
                 }
-            } else {
-                logger.error("The new request is not a NACK nor a CALL, but a ${newMsg.funcAction}!")
             }
         }
     }
@@ -124,8 +136,8 @@ suspend fun main(args: Array<String>) {
     val registerSuccess = gf.registerFaaS(tf)
     if (registerSuccess == StatusCode.Success) {
         repeat(args[1].toInt()){
-            gf.handleNextRequest() //TODO: call in a coroutine? or a separate thread
-            println("${it+1} requests processed")
+            val epocTime = gf.handleNextRequest() //TODO: call in a coroutine? or a separate thread
+            println("${it+1} requests processed. last took ${epocTime}ms")
         }
     }
     gf.terminate()

@@ -8,6 +8,7 @@ import geofaas.Model.StatusCode
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import org.apache.logging.log4j.LogManager
+import kotlin.system.measureTimeMillis
 
 class Client (loc: Location, debug: Boolean, host: String, port: Int, id: String = "ClientGeoFaaS1"){
     private val logger = LogManager.getLogger()
@@ -19,18 +20,26 @@ class Client (loc: Location, debug: Boolean, host: String, port: Int, id: String
         return gbClient.updateLocation(loc)
     }
 
-    fun call(funcName: String, param: String): String? {
+    // returns a pair of result and run time
+    fun call(funcName: String, param: String): Pair<String?, Long> {
         val retries = 2 //2
-        val result: FunctionMessage? = gbClient.callFunction(funcName, param, retries, 0.1)
+        val result: FunctionMessage?
+        val elapsed = measureTimeMillis {
+            result = gbClient.callFunction(funcName, param, retries, 0.1)
+        }
         if (result == null)
-            logger.error("No result received after {} retries!", retries)
+            logger.error("No result received after {} retries! {}ms", retries, elapsed)
 
         logger.debug("my geoBroker client id: {}", gbClient.basicClient.identity)
-        return result?.data
+        return Pair(result?.data, elapsed)
     }
 
     fun shutdown() {
         gbClient.terminate()
+    }
+
+    fun throwSafeException(msg: String) {
+        gbClient.throwSafeException(msg) // also runs terminate
     }
 
 }
@@ -66,9 +75,9 @@ val locBerlinToFrance = listOf("Potsdam" to Location(52.348763,13.051758), // Po
     "Paris" to Location(48.936935,2.702637), // paris
     "Rennes" to Location(48.107431,-1.691895) // rennes
 )
-val locFrankParisBerlin = listOf("Nürnberg" to Location(49.468124,11.074219),
+val locFrankParisBerlin = listOf("Nurnberg" to Location(49.468124,11.074219),
     "Mannheim" to Location(49.482401,8.459473),
-    "Düsseldorf" to Location(51.165567,6.811523),
+    "Dusseldorf" to Location(51.165567,6.811523),
     "Letzebuerg" to Location(49.951220,6.086426),
     "Hessen" to Location(50.597186,9.382324),
     "North Leipzig" to Location(51.631657,12.260742), // berlin is responsible
@@ -93,28 +102,30 @@ suspend fun main() {
 //    println("${client.id} finished!")
     ////////////////////////////////// multiple Moving Clients //////////////////////
     val clientLocPairs = mutableListOf<Pair<Client, List<Pair<String,Location>>>>()
-    clientLocPairs.add(Client(locFranceToPoland.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "ClientGeoFaaS1") to locFranceToPoland)
-    clientLocPairs.add(Client(locBerlinToFrance.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "ClientGeoFaaS2") to locBerlinToFrance)
-    clientLocPairs.add(Client(locFrankParisBerlin.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "ClientGeoFaaS3") to locFrankParisBerlin)
+    clientLocPairs.add(Client(locFranceToPoland.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "Client1") to locFranceToPoland)
+    clientLocPairs.add(Client(locBerlinToFrance.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "Client2") to locBerlinToFrance)
+    clientLocPairs.add(Client(locFrankParisBerlin.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "Client3") to locFrankParisBerlin)
     coroutineScope {
-        clientLocPairs.forEach { clientLocPair ->
+        clientLocPairs.forEachIndexed { i, clientLocPair ->
             launch {
                 val client = clientLocPair.first
                 val locations = clientLocPair.second
                 println("${client.id} Started at ${locations.first().first}")
-                locations.forEachIndexed { i, loc ->
-//                    sleepNoLog(3000, 0)
-                    if (i > 0) {
-                        println("${client.id} is going to ${loc.first}")
-                        client.moveTo(loc.second)
-//                        sleepNoLog(6000, 0)
+                val elapsed = measureTimeMillis {
+                    locations.forEachIndexed { i, loc ->
+    //                    sleepNoLog(3000, 0)
+                        if (i > 0) {
+                            println("${client.id} is going to ${loc.first}")
+                            client.moveTo(loc.second)
+    //                        sleepNoLog(6000, 0)
+                        }
+                        val res: Pair<String?, Long> = client.call("sieve",  "${client.id} | $i-${loc.first}")
+                        if(res.first != null) println("${client.id} Result$i: ${res.first}. (${res.second}ms)")
+                        else client.throwSafeException("${client.id}-($i-${loc.first}): NOOOOOOOOOOOOOOO Response! (${res.second}ms)")//println("${client.id}: NOOOOOOOOOOOOOOO Response!")
                     }
-                    val res: String? = client.call("sieve", client.id)
-                    if(res != null) println("${client.id} Result: $res")
-                    else println("${client.id}: NOOOOOOOOOOOOOOO Response!")
                 }
                 client.shutdown()
-                println("${client.id} finished!")
+                println("${client.id} finished! ${locations.size} total locations in ${elapsed}ms")
             }
         }
     }
