@@ -49,7 +49,7 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
                     val resultTopic = Topic("functions/$funcName/result")
                     val newSubscribeStatus: StatusCode = subscribe(resultTopic, subFence) // fast forward subscribeFunction() process
                     if(newSubscribeStatus == StatusCode.Failure)
-                        throw RuntimeException("Failed to subscribe to '$resultTopic'. StatusCode: $newSubscribeStatus")
+                        throwSafeException("Failed to subscribe to '$resultTopic'. StatusCode: $newSubscribeStatus")
 
                     result = listenForResult(resTimeout)
                     if (result == null) { // only in the case of WrongBroker, do a retry if failed for result
@@ -62,10 +62,10 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
                                 result = listenForResult(resTimeout)
                         }
                     }
-                } else throw RuntimeException("Failed to switch the broker. StatusCode: $changeStatus" )
+                } else throwSafeException("Failed to switch the broker. StatusCode: $changeStatus" )
             }
             StatusCode.Failure -> {} // do nothing. will retry with the cloud directly
-            else -> throw RuntimeException("Unexpected publish status '${pubStatus.first}'")
+            else -> throwSafeException("Unexpected publish status '${pubStatus.first}'")
         }
         // Note: no retry for listening for Result
 
@@ -77,7 +77,7 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
                 StatusCode.Failure -> {
                     logger.error("Can't call Cloud GeoFaaS for $funcName($data)")
                 }
-                else -> throw RuntimeException("Unexpected publish status from Cloud '${pubCloudStatus}'")
+                else -> throwSafeException("Unexpected publish status from Cloud '${pubCloudStatus}'")
             }
         }
 

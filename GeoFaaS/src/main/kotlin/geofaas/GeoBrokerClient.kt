@@ -43,13 +43,13 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                         logger.fatal("No responsible broker found! while $id tried to connect to the remote geoBroker '$host:$port'.")
                     else
                         logger.fatal("Duplicate ids! $id can't connect to the remote geoBroker '$host:$port'.")
-                    throw RuntimeException("Error while connecting to the geoBroker")
+                    throwSafeException("Error while connecting to the geoBroker")
                 }
             } else if (connAck == null) {
-                throw RuntimeException("Timeout! can't connect to geobroker $host:$port. Check the Address and try again")
+                throwSafeException("Timeout! can't connect to geobroker $host:$port. Check the Address and try again")
             } else {
                 logger.fatal("Unexpected 'Conn ACK'! Received geoBroker's answer: {}", connAck)
-                throw RuntimeException("Error while connecting to the geoBroker")
+                throwSafeException("Error while connecting to the geoBroker")
             }
         } else if (connStatus == StatusCode.WrongBroker && id.startsWith("GeoFaaS-")){
             if (connAck is Payload.DISCONNECTPayload) { // because smart cast doesn't happen here
@@ -61,7 +61,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                 connAck = basicClient.receiveWithTimeout(8000)
                 val connSuccess = processConnAckSuccess(connAck, newBrokerInfo, true)
                 if (connSuccess != StatusCode.Success)
-                    throw RuntimeException("Error connecting to the new geoBroker")
+                    throwSafeException("Error connecting to the new geoBroker")
             }
         }
     }
@@ -311,15 +311,15 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                         return Pair(StatusCode.Success, pubAck.brokerInfo)
                     } else {
                         logger.fatal("Failed to change the broker. And the previous broker is no longer responsible")
-                        throw RuntimeException("Error updating the location to $newLoc")
+                        throwSafeException("Error updating the location to $newLoc"); throw RuntimeException() // dummy, to skip return check
                     }
                 } else {
                     logger.fatal("No broker is responsible for the current location")
-                    throw RuntimeException("Error updating the location to $newLoc")
+                    throwSafeException("Error updating the location to $newLoc"); throw RuntimeException() // dummy
                 }
             } else {
                 logger.fatal("unexpected reason code: {}", pubAck.reasonCode)
-                throw RuntimeException("Error updating the location to $newLoc")
+                throwSafeException("Error updating the location to $newLoc"); throw RuntimeException() // dummy
             }
         } else if (pubAck is Payload.PINGRESPPayload) {
             if(pubAck.reasonCode == ReasonCode.LocationUpdated) { // success
@@ -332,7 +332,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                 return Pair(StatusCode.NotConnected, null)
             } else {
                 logger.fatal("unexpected reason code: {}", pubAck.reasonCode)
-                throw RuntimeException("Error updating the location to $newLoc")
+                throwSafeException("Error updating the location to $newLoc"); throw RuntimeException() // dummy
             }
         } else if (pubAck == null) {
             logger.error("Updating location failed! No response from the '${basicClient.identity}' broker")
@@ -413,10 +413,12 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
 
             return StatusCode.Failure
         } else if (connAck == null) {
-            if (withTimeout)
-                throw RuntimeException("Timeout! $id can't connect to the geobroker ${broker.ip}:${broker.port}. Check the Address and try again")
-            else
-                throw RuntimeException("Empty Response! $id can't connect to the geobroker ${broker.ip}:${broker.port}. Check the Address and try again")
+            if (withTimeout) {
+                throwSafeException("Timeout! $id can't connect to the geobroker ${broker.ip}:${broker.port}. Check the Address and try again")
+                throw RuntimeException()} // dummy
+            else {
+                throwSafeException("Empty Response! $id can't connect to the geobroker ${broker.ip}:${broker.port}. Check the Address and try again")
+                throw RuntimeException() } // dummy
         } else {
             logger.fatal("Unexpected 'Conn ACK'! Received geoBroker's answer: {}", connAck)
             return StatusCode.Failure
@@ -467,5 +469,9 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             else -> logger.warn(logMsg, pubAck)
         }
         return true
+    }
+    fun throwSafeException(msg: String) {
+        this.terminate()
+        throw RuntimeException(msg)
     }
 }
