@@ -213,8 +213,8 @@ class DisGBAtSubscriberMatchingLogic(private val clientDirectory: ClientDirector
     override fun processBrokerForwardPublish(otherBrokerId: String, payload: BrokerForwardPublishPayload,
                                              clients: Socket, brokers: Socket) {
 
-        logger.debug(">>> inside 'processBrokerForwardPublish()'<<<")
-        logger.debug(">>> otherBrokerId: $otherBrokerId, ")
+//        logger.debug(">>> inside 'processBrokerForwardPublish()'<<<")
+//        logger.debug(">>> otherBrokerId: $otherBrokerId, ")
         // the id is determined by ZeroMQ based on the first frame, so here it is the id of the forwarding broker
         logger.debug("Processing BrokerForwardPublish from broker {}, message is {}",
                 otherBrokerId,

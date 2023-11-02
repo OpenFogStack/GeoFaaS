@@ -50,7 +50,6 @@ class TinyFaasClient (val host: String, val port: Int, private var functionsLoca
     }
 
     suspend fun remoteFunctions(): Set<GeoFaaSFunction>? {
-        // TODO: try catch connection refused
         try {
             val resp = client.get("http://$host:8080/list")
             val body = resp.body<String>()

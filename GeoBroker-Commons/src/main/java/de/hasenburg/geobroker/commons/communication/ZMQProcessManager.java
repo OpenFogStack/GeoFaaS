@@ -71,7 +71,7 @@ public class ZMQProcessManager {
 		}
 
 		context.destroy();
-		logger.info("Teared down ZMQProcessManager");
+		logger.debug("Teared down ZMQProcessManager");
 		return true;
 	}
 

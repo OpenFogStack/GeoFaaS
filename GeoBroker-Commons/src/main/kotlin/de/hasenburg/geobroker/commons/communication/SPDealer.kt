@@ -102,7 +102,7 @@ class SPDealer(val ip: String = "localhost", val port: Int = 5559, val socketHWM
         wasSent.close()
         wasReceived.close()
         logger.trace("Finished teardown of channels")
-        logger.info("Shutdown of SPDealer completed")
+        logger.debug("Shutdown of SPDealer completed")
     }
 
     private suspend fun processToSendBlocking() = coroutineScope {

@@ -106,7 +106,7 @@ suspend fun main() {
     clientLocPairs.add(Client(locBerlinToFrance.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "Client2") to locBerlinToFrance)
     clientLocPairs.add(Client(locFrankParisBerlin.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "Client3") to locFrankParisBerlin)
     coroutineScope {
-        clientLocPairs.forEachIndexed { i, clientLocPair ->
+        clientLocPairs.forEach { clientLocPair ->
             launch {
                 val client = clientLocPair.first
                 val locations = clientLocPair.second
