@@ -3,7 +3,6 @@ package geofaas
 import de.hasenburg.geobroker.commons.model.spatial.Geofence
 import de.hasenburg.geobroker.commons.model.spatial.Location
 import de.hasenburg.geobroker.commons.model.spatial.toGeofence
-import de.hasenburg.geobroker.commons.sleepNoLog
 import io.ktor.client.call.*
 import org.apache.logging.log4j.LogManager
 import geofaas.Model.FunctionAction
@@ -11,12 +10,6 @@ import geofaas.Model.GeoFaaSFunction
 import geofaas.Model.ClientType
 import geofaas.Model.FunctionMessage
 import geofaas.Model.StatusCode
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
-import kotlin.coroutines.coroutineContext
-import kotlin.jvm.internal.Intrinsics.Kotlin
 import kotlin.system.measureTimeMillis
 
 class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaS-Edge1", brokerAreaManager: BrokerAreaManager) {
@@ -54,8 +47,8 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
                 val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
                 if (newMsg.funcAction == FunctionAction.CALL) {
                     gbClient.sendAck(newMsg.funcName, clientFence, newMsg.responseTopicFence.senderId) // tell the client you received its request
-                    val registeredFunctionsName: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
-                    if (newMsg.funcName in registeredFunctionsName){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
+                    val registeredFunctions: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
+                    if (newMsg.funcName in registeredFunctions){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
                         val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName, null)
                         val response = selectedFaaS.call(newMsg.funcName, newMsg.data)
                         logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
@@ -89,6 +82,9 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
             }
         }
     }
+    fun collectNewMessages() { // blocking
+        gbClient.asyncListen()
+    }
     fun terminate() {
         gbClient.terminate()
         faasRegistry.clear()
@@ -119,11 +115,14 @@ suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-r
     val tf = TinyFaasClient("localhost", 8000)
 
     val registerSuccess = gf.registerFaaS(tf)
+    val listeningThread = Thread { do { gf.collectNewMessages() } while (true) }
     if (registerSuccess == StatusCode.Success) {
+        listeningThread.start()
         repeat(args[1].toInt()){
             val epocTime = gf.handleNextRequest() //TODO: call in a coroutine? or a separate thread
             println("${it+1} requests processed. last took ${epocTime}ms")
         }
+        listeningThread.interrupt()
     }
     gf.terminate()
 }

@@ -17,14 +17,16 @@ import geofaas.Model.StatusCode
 import org.apache.logging.log4j.Level
 import org.apache.logging.log4j.LogManager
 import java.util.*
+import java.util.concurrent.BlockingQueue
+import java.util.concurrent.LinkedBlockingQueue
 
 // Basic Geobroker client for GeoFaaS system
 abstract class GeoBrokerClient(var location: Location, val mode: ClientType, debug: Boolean, host: String = "localhost", port: Int = 5559, val id: String = "GeoFaaSAbstract") {
     private val logger = LogManager.getLogger()
     private val processManager = ZMQProcessManager()
     private var listeningTopics = mutableSetOf<ListeningTopic>()
-    private val ackQueue : Queue<Payload> = LinkedList<Payload>()
-    private val pubQueue : Queue<Payload> = LinkedList<Payload>()
+    protected val ackQueue : BlockingQueue<Payload> = LinkedBlockingQueue<Payload>()
+    val pubQueue : BlockingQueue<Payload> = LinkedBlockingQueue<Payload>()
     private val visitedBrokers = mutableSetOf<Pair<String, Int>>()
     var basicClient = GBBasicClient(host, port, identity = id) // NOTE: 'gbSimpleClient.identity' and 'GeoBrokerClient.id' are only same on the initialization and the former could change later
     val gson = Gson()
@@ -231,23 +233,32 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
     }
 
     fun listenForFunction(type: String, timeout: Int): FunctionMessage? {
-        // function call/ack/nack/result
+        // wiki: function call/ack/nack/result
         val msg: Payload?
-        val dequeuedPub = pubQueue.poll()
-        if (dequeuedPub == null) {
-            logger.info("Listening for a GeoFaaS '$type'...")
-            msg = when (timeout){
-                0 -> basicClient.receive() // blocking
-                else -> basicClient.receiveWithTimeout(timeout) // returns null after expiry
+        when(mode) { // GeoFaaS server uses a thread for listening
+            ClientType.CLIENT -> {
+                val dequeuedPub = pubQueue.poll()
+                if (dequeuedPub == null) {
+                    logger.info("Listening for a GeoFaaS '$type'...")
+                    msg = when (timeout){
+                        0 -> basicClient.receive() // blocking
+                        else -> basicClient.receiveWithTimeout(timeout) // returns null after expiry
+                    }
+                    if (timeout > 0 && msg == null) {
+                        logger.error("Listening timeout (${timeout}ms)! pubQueue size:{}", pubQueue.size)
+                        return null
+                    }
+                    logger.debug("gB EVENT: {}", msg)
+                } else {
+                    msg = dequeuedPub
+                    logger.debug("Pub queue's size is ${pubQueue.size}. dequeued: {}", dequeuedPub)
+                }
             }
-            if (timeout > 0 && msg == null) {
-                logger.error("Listening timeout (${timeout}ms)! pubQueue size:{}", pubQueue.size)
-                return null
+            else -> { // GeoFaaS Edge/Cloud
+                logger.info("Waiting for a GeoFaaS '$type'...")
+                msg = pubQueue.take() // blocking
+                logger.debug("Pub queue's size is ${pubQueue.size}. dequeued: {}", msg)
             }
-            logger.debug("gB EVENT: {}", msg)
-        } else {
-            msg = dequeuedPub
-            logger.debug("Pub queue's size is ${pubQueue.size}. dequeued: {}", dequeuedPub)
         }
 
         if (msg is Payload.PUBLISHPayload) {
@@ -272,8 +283,12 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         }
     }
     fun listenForPubAckAndProcess(funcAct: FunctionAction, funcName: String, timeout: Int): Pair<StatusCode, BrokerInfo?> {
-        val enqueuedAck = ackQueue.poll() //TODO: the ack could also be a SubAck or UnSubAck, and maybe others
-        if (enqueuedAck == null) {
+        val enqueuedAck: Payload? //Note: the ack could also be a SubAck or UnSubAck, and maybe others
+        enqueuedAck = when(mode) {
+            ClientType.CLIENT -> ackQueue.poll() // non-blocking
+            else -> ackQueue.take() // blocking (for GeoFaaS server)
+        }
+        if (enqueuedAck == null) { // only for the client
             if (timeout > 0)
                 logger.debug("PubAck queue is empty. Listening for a PubAck for ${timeout}ms...")
             else
