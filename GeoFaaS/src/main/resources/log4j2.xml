@@ -4,7 +4,10 @@
         <Console name="Console" target="SYSTEM_OUT">
             <PatternLayout pattern="%highlight{%d{HH:mm:ss.SSS} [%-15t] %-5level %-30c{2} - %msg%n}"/>
         </Console>
-        <File name="File" fileName="logs/client.log" append="false">
+        <File name="File" fileName="logs/geofaas.log" append="false">
+            <PatternLayout pattern="%highlight{%d{HH:mm:ss.SSS} [%-15t] %-5level %-30c{2} - %msg%n}"/>
+        </File>
+        <File name="File_client" fileName="logs/client.log" append="false">
             <PatternLayout pattern="%highlight{%d{HH:mm:ss.SSS} [%-15t] %-5level %-30c{2} - %msg%n}"/>
         </File>
     </Appenders>
@@ -13,9 +16,9 @@
             <AppenderRef ref="Console"/>
             <AppenderRef ref="File"/>
         </Root>
-        <Logger name="de.hasenburg.geobroker.client.main.MultiFileClientKt" level="info" additivity="false">
+        <Logger name="geofaas.Client" level="info" additivity="false">
             <AppenderRef ref="Console"/>
-            <AppenderRef ref="File"/>
+            <AppenderRef ref="File_client"/>
         </Logger>
     </Loggers>
 </Configuration>
