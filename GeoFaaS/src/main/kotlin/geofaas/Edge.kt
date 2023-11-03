@@ -43,7 +43,7 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
         val newMsg :FunctionMessage? = gbClient.listenForFunction("CALL", 0) // blocking
         return measureTimeMillis {
             if (newMsg != null) {
-                if (newMsg.typeCode == Model.TypeCode.RETRY) logger.warn("received a retry call from ${newMsg.responseTopicFence.senderId}")
+                if (newMsg.typeCode == Model.TypeCode.RETRY) Measurement.log(newMsg.responseTopicFence.senderId, -1, "Retry,${newMsg.funcAction}", "${newMsg.funcName}(${newMsg.data})")//logger.warn("received a retry call from ${newMsg.responseTopicFence.senderId}")
                 val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
                 if (newMsg.funcAction == FunctionAction.CALL) {
                     gbClient.sendAck(newMsg.funcName, clientFence, newMsg.responseTopicFence.senderId) // tell the client you received its request
@@ -120,7 +120,7 @@ suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-r
         listeningThread.start()
         repeat(args[1].toInt()){
             val epocTime = gf.handleNextRequest() //TODO: call in a coroutine? or a separate thread
-            println("${it+1} requests processed. last took ${epocTime}ms")
+            Measurement.log(args[0], epocTime, "processed,${it+1}", "last took")
         }
         listeningThread.interrupt()
     }

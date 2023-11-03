@@ -10,6 +10,9 @@
         <File name="Measurement" fileName="logs/measurement.log" append="false">
             <PatternLayout pattern="%d{HH:mm:ss.SSS} [%-15t] %-5level >>> %msg%n"/>
         </File>
+        <Console name="Measurement_Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} [%-15t] %-35level >>> %msg%n"/>
+        </Console>
     </Appenders>
     <Loggers>
         <Root level="info" additivity="false"> <!-- default. in case the caller class name isn't defined  -->
@@ -22,6 +25,7 @@
 <!--        </Logger>-->
         <Logger name="measurement" level="info" additivity="false">
             <AppenderRef ref="Measurement"/>
+            <AppenderRef ref="Measurement_Console"/>
         </Logger>
     </Loggers>
 </Configuration>

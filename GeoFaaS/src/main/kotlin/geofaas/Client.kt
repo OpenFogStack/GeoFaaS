@@ -93,7 +93,7 @@ val brokerAddresses = mapOf("Frankfurt" to "141.23.28.205",
 
 suspend fun main() {
 
-    val debug = true
+    val debug = false
 //    val client = Client(locFranceToPoland.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "ClientGeoFaaS1")
 //    val res: String? = client.call("sieve", client.id)
 //    if(res != null) println("${client.id} Result: $res")
@@ -110,22 +110,22 @@ suspend fun main() {
             launch {
                 val client = clientLocPair.first
                 val locations = clientLocPair.second
-                println("${client.id} Started at ${locations.first().first}")
+                Measurement.log(client.id, -1, "Started at", locations.first().first)
                 val elapsed = measureTimeMillis {
                     locations.forEachIndexed { i, loc ->
     //                    sleepNoLog(3000, 0)
                         if (i > 0) {
-                            println("${client.id} is going to ${loc.first}")
+                            Measurement.log(client.id, -1, "Moving to", loc.first)
                             client.moveTo(loc.second)
     //                        sleepNoLog(6000, 0)
                         }
                         val res: Pair<String?, Long> = client.call("sieve",  "${client.id} | $i-${loc.first}")
-                        if(res.first != null) println("${client.id} Result$i: ${res.first}. (${res.second}ms)")
-                        else client.throwSafeException("${client.id}-($i-${loc.first}): NOOOOOOOOOOOOOOO Response! (${res.second}ms)")//println("${client.id}: NOOOOOOOOOOOOOOO Response!")
+                        if(res.first != null) Measurement.log(client.id, res.second, "Result-$i", res.first.toString())
+                        else client.throwSafeException("${client.id}-($i-${loc.first}): NOOOOOOOOOOOOOOO Response! (${res.second}ms)")
                     }
                 }
                 client.shutdown()
-                println("${client.id} finished! ${locations.size} total locations in ${elapsed}ms")
+                Measurement.log(client.id, elapsed, "Finished", "${locations.size} total locations")
             }
         }
     }

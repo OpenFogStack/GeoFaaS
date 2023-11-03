@@ -43,7 +43,7 @@ class Cloud(loc: Location, debug: Boolean, host: String = "localhost", port: Int
         val newMsg :FunctionMessage? = gbClient.listenForFunction("CALL(/retry) or NACK", 0) // blocking
         return measureTimeMillis {
             if (newMsg != null) {
-                if (newMsg.typeCode == Model.TypeCode.RETRY) logger.warn("received a retry call from ${newMsg.responseTopicFence.senderId}")
+                if (newMsg.typeCode == Model.TypeCode.RETRY) Measurement.log(newMsg.responseTopicFence.senderId, -1, "Retry,${newMsg.funcAction}", "${newMsg.funcName}(${newMsg.data})")
                 //sleepNoLog(1000, 0) // Note: some delay for the cloud?
                 val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
                 if (newMsg.funcAction == FunctionAction.NACK) {
@@ -138,7 +138,7 @@ suspend fun main(args: Array<String>) {
         listeningThread.start()
         repeat(args[1].toInt()){
             val epocTime = gf.handleNextRequest() //TODO: call in a coroutine? or a separate thread
-            println("${it+1} requests processed. last took ${epocTime}ms")
+            Measurement.log(args[0], epocTime, "processed,${it+1}", "last took")
         }
         listeningThread.interrupt()
     }
