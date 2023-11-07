@@ -95,7 +95,7 @@
                             <appendAssemblyId>false</appendAssemblyId>
                             <archive>
                                 <manifest>
-                                    <mainClass>geofaas.EdgeKt</mainClass>
+                                    <mainClass>geofaas.ServerKt</mainClass>
 <!--                                    <mainClass>geofaas.Clientkt</mainClass>-->
                                 </manifest>
                                 <manifestEntries>
@@ -105,31 +105,7 @@
                             <descriptorRefs>
                                 <descriptorRef>jar-with-dependencies</descriptorRef>
                             </descriptorRefs>
-                            <finalName>GeoFaaSEdge</finalName>
-<!--                            <finalName>ClientGeoFaaS</finalName>-->
-                        </configuration>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>single</goal>
-                        </goals>
-                    </execution>
-                    <execution>
-                        <id>GeoFaaSCloud</id>
-                        <configuration>
-                            <appendAssemblyId>false</appendAssemblyId>
-                            <archive>
-                                <manifest>
-                                    <mainClass>geofaas.CloudKt</mainClass>
-<!--                                    <mainClass>geofaas.Clientkt</mainClass>-->
-                                </manifest>
-                                <manifestEntries>
-                                    <Multi-Release>true</Multi-Release>
-                                </manifestEntries>
-                            </archive>
-                            <descriptorRefs>
-                                <descriptorRef>jar-with-dependencies</descriptorRef>
-                            </descriptorRefs>
-                            <finalName>GeoFaaSCloud</finalName>
+                            <finalName>GeoFaaSServer</finalName>
 <!--                            <finalName>ClientGeoFaaS</finalName>-->
                         </configuration>
                         <phase>package</phase>

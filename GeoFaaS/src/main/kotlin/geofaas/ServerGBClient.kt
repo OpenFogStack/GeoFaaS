@@ -19,7 +19,7 @@ class ServerGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
     private val logger = LogManager.getLogger()
     private val brokerArea: Geofence = brokerAreaManager.ownBrokerArea.coveredArea //Note: parsing geoFaaS's brokerAreaManager Geofence to geobroker Geofence
 
-    // asynchronously fills the queues with new messages
+    // to asynchronously fill the queues with new messages
     fun asyncListen() { // blocking
         when (val newMessage = basicClient.receive()) {
             is Payload.PUBLISHPayload -> {

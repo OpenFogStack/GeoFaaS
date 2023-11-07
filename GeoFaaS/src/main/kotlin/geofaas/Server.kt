@@ -3,22 +3,22 @@ package geofaas
 import de.hasenburg.geobroker.commons.model.spatial.Geofence
 import de.hasenburg.geobroker.commons.model.spatial.Location
 import de.hasenburg.geobroker.commons.model.spatial.toGeofence
+import org.apache.logging.log4j.LogManager
 import geofaas.Measurement.logRuntime
 import io.ktor.client.call.*
-import org.apache.logging.log4j.LogManager
+import io.ktor.client.statement.*
 import geofaas.Model.FunctionAction
 import geofaas.Model.GeoFaaSFunction
 import geofaas.Model.ClientType
 import geofaas.Model.FunctionMessage
 import geofaas.Model.StatusCode
-import io.ktor.client.statement.*
 import kotlin.system.measureTimeMillis
 
-class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaS-Edge1", brokerAreaManager: BrokerAreaManager) {
+class Server(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaS-Edge1", brokerAreaManager: BrokerAreaManager) {
     private val logger = LogManager.getLogger()
-    private val gbClient = ServerGBClient(loc, debug, host, port, id, ClientType.EDGE, brokerAreaManager)
+    private val mode = if(id == "GeoFaaS-Cloud") ClientType.CLOUD else ClientType.EDGE
+    private val gbClient = ServerGBClient(loc, debug, host, port, id, mode, brokerAreaManager)
     private var faasRegistry = mutableListOf<TinyFaasClient>()
-
     // returns success if success to Subscribe to all the functions
     suspend fun registerFaaS(tf: TinyFaasClient): StatusCode {
         val funcs: Set<GeoFaaSFunction>
@@ -46,14 +46,15 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
 
     // returns run time
     suspend fun handleNextRequest(): Long {
-        val newMsg :FunctionMessage? = gbClient.listenForFunction("CALL", 0) // blocking
+        val listeningMsg = if (mode == ClientType.CLOUD) "CALL(/retry) or NACK" else "CALL"
+        val newMsg :FunctionMessage? = gbClient.listenForFunction(listeningMsg, 0) // blocking
         Measurement.logStartHeader("${ newMsg?.funcName }(${newMsg?.data}) ${newMsg?.funcAction}")
         return measureTimeMillis {
             if (newMsg != null) {
                 if (newMsg.typeCode == Model.TypeCode.RETRY) Measurement.log(newMsg.responseTopicFence.senderId, -1, "Retry,${newMsg.funcAction}", "${newMsg.funcName}(${newMsg.data})")//logger.warn("received a retry call from ${newMsg.responseTopicFence.senderId}")
                 val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
-                if (newMsg.funcAction == FunctionAction.CALL) { // todo: send the ack after checking if there is any FaaS serving the function and tell the client about it
-                    logRuntime(newMsg.responseTopicFence.senderId, "ACK,sent", newMsg.funcName){
+                if (newMsg.funcAction == FunctionAction.CALL) { // cloud behave same as Edge, also listening to '/retry'
+                    logRuntime(newMsg.responseTopicFence.senderId, "ACK,sent", newMsg.funcName){ // todo: send the ack after checking if there is any FaaS serving the function and tell the client about it
                         gbClient.sendAck(newMsg.funcName, clientFence, newMsg.responseTopicFence.senderId) // tell the client you received its request
                     }
                     val registeredFunctions: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
@@ -66,8 +67,9 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
                         Measurement.log(gbClient.id, faasTime, "FaaS,Response", "${newMsg.funcName}(${newMsg.data})")
                         logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
 
-    //                    logger.warn("Offloading all requests! for test purposes!")
-                        if (response != null) {
+                        if (gbClient.id == "GeoFaaS-Berlin")
+                            logger.warn("Offloading all requests! for test purposes!")
+                        if (response != null && gbClient.id != "GeoFaaS-Berlin") {
                             val responseBody: String = response.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
                             logRuntime(newMsg.responseTopicFence.senderId, "Result,sent", newMsg.funcName){
                                 gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.responseTopicFence.senderId)
@@ -78,16 +80,48 @@ class Edge(loc: Location, debug: Boolean, host: String = "localhost", port: Int 
     //                        val response2 = selectedFaaS.call(newMsg.funcName, newMsg.data)
     //                        logger.debug("FaaS's raw Response: {}", response2)
                             //TODO call another FaaS and if there is no more FaaS serving the func, offload
-                            logger.error("No response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}' Offloading to cloud...")
-                            logRuntime(newMsg.responseTopicFence.senderId, "NACK,sent", "No response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}' Offloading to cloud..."){
-                                gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence, newMsg.responseTopicFence.senderId, "GeoFaaS-Cloud")
+                            logger.error("No response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}'")
+                            if(mode == ClientType.CLOUD)
+                                logger.error("The Client will NOT receive any response! This is end of the line of offloading")
+                            else {
+                                logger.warn("Offloading to cloud...")
+                                logRuntime(newMsg.responseTopicFence.senderId, "NACK,sent", "No response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}' Offloading to cloud..."){
+                                    gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence, newMsg.responseTopicFence.senderId, "GeoFaaS-Cloud")
+                                }
                             }
                         }
                     } else {
-                        logger.fatal("No FaaS is serving the '${newMsg.funcName}' function! Offloading to cloud...")
-                        logRuntime(newMsg.responseTopicFence.senderId, "NACK,sent", "No FaaS is serving the '${newMsg.funcName}' function! Offloading to cloud..."){
-                            gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence, newMsg.responseTopicFence.senderId, "GeoFaaS-Cloud")
+                        logger.fatal("No FaaS is serving the '${newMsg.funcName}' function!")
+                        if(mode == ClientType.CLOUD)
+                            logger.error("The Client will NOT receive any response! This is end of the line of offloading")
+                        else {
+                            logger.warn("Offloading to cloud...")
+                            logRuntime(newMsg.responseTopicFence.senderId, "NACK,sent", "No FaaS is serving the '${newMsg.funcName}' function! Offloading to cloud..."){
+                                gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence, newMsg.responseTopicFence.senderId, "GeoFaaS-Cloud")
+                            }
                         }
+                    }
+                } else if (newMsg.funcAction == FunctionAction.NACK) { // only for Cloud
+//                gbClient.sendAck(newMsg.funcName, clientFence) // tell the client you received its request
+                    val registeredFunctions: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
+                    if (newMsg.funcName in registeredFunctions){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
+                        val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName, null)
+                        val response = selectedFaaS.call(newMsg.funcName, newMsg.data)
+                        logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
+
+                        if (response != null) {
+                            val responseBody: String = response.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
+//                        GlobalScope.launch{
+                            gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.responseTopicFence.senderId)
+                            logger.info("Sent the result '{}' to functions/${newMsg.funcName}/result for {}", responseBody, newMsg.responseTopicFence.senderId) // wiki: Found 1229 primes under 10000
+//                        }
+                        } else { // connection refused?
+                            logger.error("No response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}'")
+//                        gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence)
+                        }
+                    } else {
+                        logger.fatal("No FaaS is serving the '${newMsg.funcName}' function!")
+//                    gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence)
                     }
                 } else {
                     logger.error("The new request is not a CALL, but a ${newMsg.funcAction}!")
@@ -130,10 +164,11 @@ suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-r
     val brokerArea: Geofence = disgbRegistry.ownBrokerArea.coveredArea // broker area: radius: 2.1
     println(brokerArea.center)
     Measurement.log(args[0], -1, "Location", brokerArea.center.toString())
-    val gf = Edge(brokerArea.center, true, brokerInfo.ip, brokerInfo.port, "GeoFaaS-${brokerInfo.brokerId}", brokerAreaManager =  disgbRegistry)
-    val tf = TinyFaasClient("localhost", 8000)
+    val gf = Server(brokerArea.center, args[3].toBoolean(), brokerInfo.ip, brokerInfo.port, "GeoFaaS-${brokerInfo.brokerId}", brokerAreaManager =  disgbRegistry)
 
+    val tf = TinyFaasClient("localhost", 8000)
     val registerSuccess = gf.registerFaaS(tf)
+
     val listeningThread = Thread { do { gf.collectNewMessages() } while (true) }
     if (registerSuccess == StatusCode.Success) {
         listeningThread.start()
