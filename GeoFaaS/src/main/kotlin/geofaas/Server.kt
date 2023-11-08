@@ -48,9 +48,9 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
     suspend fun handleNextRequest(): Long {
         val listeningMsg = if (mode == ClientType.CLOUD) "CALL(/retry) or NACK" else "CALL"
         val newMsg :FunctionMessage? = gbClient.listenForFunction(listeningMsg, 0) // blocking
-        Measurement.logStartHeader("${ newMsg?.funcName }(${newMsg?.data}) ${newMsg?.funcAction}")
         return measureTimeMillis {
             if (newMsg != null) {
+                Measurement.log(newMsg.responseTopicFence.senderId,-1,  "[newMessage, ${newMsg.funcAction}]","${ newMsg.funcName }(${newMsg.data})")
                 if (newMsg.typeCode == Model.TypeCode.RETRY) Measurement.log(newMsg.responseTopicFence.senderId, -1, "Retry,${newMsg.funcAction}", "${newMsg.funcName}(${newMsg.data})")//logger.warn("received a retry call from ${newMsg.responseTopicFence.senderId}")
                 val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
                 if (newMsg.funcAction == FunctionAction.CALL) { // cloud behave same as Edge, also listening to '/retry'
@@ -135,6 +135,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
     fun shutdown() {
         gbClient.terminate()
         faasRegistry.clear()
+        Measurement.close()
     }
     private fun bestAvailFaaS(funcName: String, except: List<TinyFaasClient>?): TinyFaasClient {
         val availableServers: List<TinyFaasClient> = faasRegistry.filter { tf -> tf.isServingFunction(funcName) }

@@ -3,14 +3,14 @@ package geofaas
 import de.hasenburg.geobroker.commons.model.disgb.BrokerInfo
 import de.hasenburg.geobroker.commons.model.spatial.Location
 import de.hasenburg.geobroker.commons.sleepNoLog
-import geofaas.Model.FunctionMessage
-import geofaas.Model.StatusCode
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import org.apache.logging.log4j.LogManager
 import kotlin.system.measureTimeMillis
+import geofaas.Model.FunctionMessage
+import geofaas.Model.StatusCode
 
-class Client (loc: Location, debug: Boolean, host: String, port: Int, id: String = "ClientGeoFaaS1"){
+class Client(loc: Location, debug: Boolean, host: String, port: Int, id: String = "ClientGeoFaaS1") {
     private val logger = LogManager.getLogger()
     private val gbClient = ClientGBClient(loc, debug, host, port, id, 8000, 3000)
     val id
@@ -129,6 +129,7 @@ suspend fun main() {
             }
         }
     }
+    Measurement.close()
     /////////////////2 local 2 nodes//////
 //    val client1 = Client(clientLoc["paris1"]!!, debug, brokerAddresses["Local"]!!, 5559)
 //    sleepNoLog(2000, 0)
