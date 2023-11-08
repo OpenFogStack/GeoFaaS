@@ -119,7 +119,7 @@
                             <appendAssemblyId>false</appendAssemblyId>
                             <archive>
                                 <manifest>
-                                    <mainClass>geofaas.Clientkt</mainClass>
+                                    <mainClass>geofaas.ClientKt</mainClass>
                                 </manifest>
                                 <manifestEntries>
                                     <Multi-Release>true</Multi-Release>

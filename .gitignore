@@ -4,9 +4,10 @@
 target/
 benchmarking_results/
 latest_benchmark_client_results/
-*.log
+logs/
 out/
 test-log.xml
 configuration.toml
 wasReceived.txt
 wasSent.txt
+GeoBroker-Server/src/main/resources/jfsb/
