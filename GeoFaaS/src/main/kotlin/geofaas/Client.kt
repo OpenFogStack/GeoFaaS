@@ -119,7 +119,7 @@ suspend fun main() {
                             client.moveTo(loc.second)
     //                        sleepNoLog(6000, 0)
                         }
-                        val res: Pair<String?, Long> = client.call("sieve",  "${client.id} | $i-${loc.first}")
+                        val res: Pair<String?, Long> = client.call("sieve",  "$i-${loc.first}|${client.id}")
                         if(res.first != null) Measurement.log(client.id, res.second, "Result-$i", res.first.toString())
                         else client.throwSafeException("${client.id}-($i-${loc.first}): NOOOOOOOOOOOOOOO Response! (${res.second}ms)")
                     }
