@@ -12,6 +12,7 @@ import geofaas.Model.GeoFaaSFunction
 import geofaas.Model.ClientType
 import geofaas.Model.FunctionMessage
 import geofaas.Model.StatusCode
+import geofaas.Model.TypeCode
 import kotlin.system.measureTimeMillis
 
 class Server(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaS-Edge1", brokerAreaManager: BrokerAreaManager) {
@@ -25,7 +26,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
         val funcListTime = measureTimeMillis { funcs = tf.remoteFunctions()!! }
         Measurement.log(gbClient.id, funcListTime, "FaaS;getFuncs", funcs.joinToString(separator = ";") { it.name })
         if (funcs.isNotEmpty()) {
-            val registerSuccess = logRuntime(gbClient.id, "Subscribe Functions", funcs.map { it.name }.toString()){
+            val registerSuccess = logRuntime(gbClient.id, "Subscribe Functions", funcs.joinToString(separator = ";") { it.name }){
                 gbClient.registerFunctions(funcs, gbClient.brokerAreaManager.ownBrokerArea.coveredArea)
             }
             return if (registerSuccess == StatusCode.Success) {
@@ -51,7 +52,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
         return measureTimeMillis {
             if (newMsg != null) {
                 Measurement.log(newMsg.responseTopicFence.senderId,-1,  "newMessage;${newMsg.funcAction}","${ newMsg.funcName }(${newMsg.data})")
-                if (newMsg.typeCode == Model.TypeCode.RETRY) Measurement.log(newMsg.responseTopicFence.senderId, -1, "Retry,${newMsg.funcAction}", "${newMsg.funcName}(${newMsg.data})")//logger.warn("received a retry call from ${newMsg.responseTopicFence.senderId}")
+                if (newMsg.typeCode == TypeCode.RETRY) Measurement.log(newMsg.responseTopicFence.senderId, -1, "Retry;${newMsg.funcAction}", "${newMsg.funcName}(${newMsg.data})")//logger.warn("received a retry call from ${newMsg.responseTopicFence.senderId}")
                 val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
                 if (newMsg.funcAction == FunctionAction.CALL) { // cloud behave same as Edge, also listening to '/retry'
                     logRuntime(newMsg.responseTopicFence.senderId, "ACK;sent", newMsg.funcName){ // todo: send the ack after checking if there is any FaaS serving the function and tell the client about it
@@ -59,7 +60,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
                     }
                     val registeredFunctions: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
                     if (newMsg.funcName in registeredFunctions){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
-                        val selectedFaaS: TinyFaasClient = logRuntime(gbClient.id, "Select;FaaS", "between: $registeredFunctions") {
+                        val selectedFaaS: TinyFaasClient = logRuntime(gbClient.id, "Select;FaaS", "between: ${registeredFunctions.joinToString(separator = ";")}") {
                             bestAvailFaaS(newMsg.funcName, null)
                         }
                         val response: HttpResponse?

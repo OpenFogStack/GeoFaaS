@@ -15,19 +15,19 @@ object Measurement {
     private val timestamp = dateFormat.format(Date())
     private val f = "logs/measurement-$timestamp.csv"
     private val bufferedWriter: BufferedWriter = try {
-        BufferedWriter(FileWriter(f, true))
+        BufferedWriter(FileWriter(f, false))
     } catch (e: IOException) {
         throw RuntimeException("Failed to create BufferedWriter for file", e)
     }
     init {
-        bufferedWriter.write("data,who,details,time,timestamp\n")
+        bufferedWriter.write("event,who,details,time,timestamp\n")
     }
 
-    fun log(who: String, time: Long, data: String, misc: String) {
+    fun log(who: String, time: Long, event: String, details: String) {
         try {
-            log4j.info("$who (${time}ms) [$data]: {$misc}")
+            log4j.info("$who (${time}ms) [$event]: {$details}")
             val currentTimestamp = timeFormat.format(Date())
-            bufferedWriter.write("$data,$who,$misc,$time,$currentTimestamp")
+            bufferedWriter.write("$event,$who,$details,$time,$currentTimestamp")
             bufferedWriter.newLine()
             bufferedWriter.flush()
         } catch (e: IOException) {
@@ -48,12 +48,12 @@ object Measurement {
 //        log4j.info("$who (${time}ms) [$data]: {$misc}")
 //    }
 
-    fun <T> logRuntime(who: String, data: String, misc: String, block: () -> T): T {
+    fun <T> logRuntime(who: String, event: String, details: String, block: () -> T): T {
         val result: T
         val runtime = measureTimeMillis {
             result = block()
         }
-        log(who, runtime, data, misc)
+        log(who, runtime, event, details)
         return result
     }
 }
