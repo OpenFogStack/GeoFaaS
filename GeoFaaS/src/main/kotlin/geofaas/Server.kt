@@ -107,14 +107,20 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
 //                gbClient.sendAck(newMsg.funcName, clientFence) // tell the client you received its request
                     val registeredFunctions: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
                     if (newMsg.funcName in registeredFunctions){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
-                        val selectedFaaS: TinyFaasClient = bestAvailFaaS(newMsg.funcName, null)
-                        val response = selectedFaaS.call(newMsg.funcName, newMsg.data)
+                        val selectedFaaS: TinyFaasClient = logRuntime(gbClient.id, "Select;FaaS", "between: ${registeredFunctions.joinToString(separator = ";")}") {
+                            bestAvailFaaS(newMsg.funcName, null)
+                        }
+                        val response: HttpResponse?
+                        val faasTime = measureTimeMillis { response = selectedFaaS.call(newMsg.funcName, newMsg.data) }
+                        Measurement.log(gbClient.id, faasTime, "FaaS;Response", "${newMsg.funcName}(${newMsg.data})")
                         logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
 
                         if (response != null) {
                             val responseBody: String = response.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
 //                        GlobalScope.launch{
-                            gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.responseTopicFence.senderId)
+                            logRuntime(newMsg.responseTopicFence.senderId, "Result;sent", newMsg.funcName){
+                                gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.responseTopicFence.senderId)
+                            }
                             logger.info("Sent the result '{}' to functions/${newMsg.funcName}/result for {}", responseBody, newMsg.responseTopicFence.senderId) // wiki: Found 1229 primes under 10000
 //                        }
                         } else { // connection refused?
