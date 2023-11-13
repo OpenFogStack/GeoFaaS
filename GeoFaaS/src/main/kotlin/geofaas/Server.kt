@@ -51,8 +51,9 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
         val newMsg :FunctionMessage? = gbClient.listenForFunction(listeningMsg, 0) // blocking
         return measureTimeMillis {
             if (newMsg != null) {
-                Measurement.log(newMsg.responseTopicFence.senderId,-1,  "newMessage;${newMsg.funcAction}","${ newMsg.funcName }(${newMsg.data})")
-                if (newMsg.typeCode == TypeCode.RETRY) Measurement.log(newMsg.responseTopicFence.senderId, -1, "Retry;${newMsg.funcAction}", "${newMsg.funcName}(${newMsg.data})")//logger.warn("received a retry call from ${newMsg.responseTopicFence.senderId}")
+                var eventMsg = "newMsg;${newMsg.funcAction}"
+                if (newMsg.typeCode == TypeCode.RETRY) eventMsg += ";Retry"
+                Measurement.log(newMsg.responseTopicFence.senderId,-1,  eventMsg,"${newMsg.funcName}(${newMsg.data})")
                 val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
                 if (newMsg.funcAction == FunctionAction.CALL) { // cloud behave same as Edge, also listening to '/retry'
                     logRuntime(newMsg.responseTopicFence.senderId, "ACK;sent", newMsg.funcName){ // todo: send the ack after checking if there is any FaaS serving the function and tell the client about it
