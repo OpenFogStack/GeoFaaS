@@ -3,6 +3,7 @@ package geofaas
 import de.hasenburg.geobroker.commons.model.spatial.Geofence
 import de.hasenburg.geobroker.commons.model.spatial.Location
 import de.hasenburg.geobroker.commons.model.spatial.toGeofence
+import de.hasenburg.geobroker.commons.model.spatial.toLocation
 import org.apache.logging.log4j.LogManager
 import geofaas.Measurement.logRuntime
 import io.ktor.client.call.*
@@ -51,9 +52,10 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
         val newMsg :FunctionMessage? = gbClient.listenForFunction(listeningMsg, 0) // blocking
         return measureTimeMillis {
             if (newMsg != null) {
-                var eventMsg = "newMsg;${newMsg.funcAction}"
-                if (newMsg.typeCode == TypeCode.RETRY) eventMsg += ";Retry"
-                Measurement.log(newMsg.responseTopicFence.senderId,-1,  eventMsg,"${newMsg.funcName}(${newMsg.data})")
+                val distanceToClient = gbClient.location.distanceKmTo(newMsg.responseTopicFence.fence.toGeofence().center)
+                var eventDesc = "newMsg;${newMsg.funcAction}"
+                if (newMsg.typeCode == TypeCode.RETRY) eventDesc += ";Retry"
+                Measurement.log(newMsg.responseTopicFence.senderId,-1,  eventDesc,"${newMsg.funcName}(${newMsg.data});$distanceToClient")
                 val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
                 if (newMsg.funcAction == FunctionAction.CALL) { // cloud behave same as Edge, also listening to '/retry'
                     logRuntime(newMsg.responseTopicFence.senderId, "ACK;sent", newMsg.funcName){ // todo: send the ack after checking if there is any FaaS serving the function and tell the client about it
@@ -149,7 +151,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
         val availableServers: List<TinyFaasClient> = faasRegistry.filter { tf -> tf.isServingFunction(funcName) }
         if (except == null)
             return availableServers.first() // TODO: choose between FaaS servers
-        else {
+        else { // add exception in selection
             return availableServers.filter { tf -> !except.contains(tf) }.first()
         }
     }
