@@ -2,6 +2,7 @@ package geofaas
 
 import de.hasenburg.geobroker.commons.model.disgb.BrokerInfo
 import de.hasenburg.geobroker.commons.model.spatial.Location
+import de.hasenburg.geobroker.commons.model.spatial.toGeofence
 import de.hasenburg.geobroker.commons.sleepNoLog
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -16,12 +17,16 @@ class Client(loc: Location, debug: Boolean, host: String, port: Int, id: String 
     val id
         get() = gbClient.id
 
-    fun moveTo(loc: Location): Pair<StatusCode, BrokerInfo?> {
-        return gbClient.updateLocation(loc)
+    fun moveTo(dest: Pair<String, Location>): Pair<StatusCode, BrokerInfo?> {
+        val status: Pair<StatusCode, BrokerInfo?>
+        val elapsed = measureTimeMillis { status = gbClient.updateLocation(dest.second) }
+        val newBroker = if (status.second == null) "sameBroker" else status.second!!.brokerId
+        Measurement.log(id, elapsed,"MovedTo;${dest.first}", newBroker)
+        return status
     }
 
     // returns a pair of result and run time
-    fun call(funcName: String, param: String): Pair<String?, Long> {
+    fun call(funcName: String, param: String): Pair<FunctionMessage?, Long> {
         val retries = 2 //2
         val result: FunctionMessage?
         val elapsed = measureTimeMillis {
@@ -31,7 +36,7 @@ class Client(loc: Location, debug: Boolean, host: String, port: Int, id: String 
             logger.error("No result received after {} retries! {}ms", retries, elapsed)
 
         logger.debug("my geoBroker client id: {}", gbClient.basicClient.identity)
-        return Pair(result?.data, elapsed)
+        return Pair(result, elapsed)
     }
 
     fun shutdown() {
@@ -44,7 +49,7 @@ class Client(loc: Location, debug: Boolean, host: String, port: Int, id: String 
 
 }
 
-val clientLoc = mapOf("middleButCloserToParis" to Location(50.289339,3.801270),
+val clientLoc = listOf("middleButCloserToParis" to Location(50.289339,3.801270),
     "parisNonOverlap" to Location(48.719961,1.153564),
     "parisOverlap" to Location(48.858391, 2.327385), // overlaps with broker area but the broker is not inside the fence
     "paris1" to Location(48.835797,2.244301), // Boulogne Bilancourt area in Paris
@@ -105,6 +110,7 @@ suspend fun main() {
     clientLocPairs.add(Client(locFranceToPoland.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "Client1") to locFranceToPoland)
     clientLocPairs.add(Client(locBerlinToFrance.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "Client2") to locBerlinToFrance)
     clientLocPairs.add(Client(locFrankParisBerlin.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "Client3") to locFrankParisBerlin)
+    clientLocPairs.add(Client(clientLoc.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "Client4") to clientLoc)
     coroutineScope {
         clientLocPairs.forEach { clientLocPair ->
             launch {
@@ -115,12 +121,12 @@ suspend fun main() {
                     locations.forEachIndexed { i, loc ->
     //                    sleepNoLog(3000, 0)
                         if (i > 0) {
-                            Measurement.log(client.id, -1, "Moving to", loc.first)
-                            client.moveTo(loc.second)
+                            client.moveTo(loc)
     //                        sleepNoLog(6000, 0)
                         }
-                        val res: Pair<String?, Long> = client.call("sieve",  "$i-${loc.first}|${client.id}")
-                        if(res.first != null) Measurement.log(client.id, res.second, "Result-$i", res.first.toString())
+                        val res: Pair<FunctionMessage?, Long> = client.call("sieve",  "$i-${loc.first}|${client.id}")
+                        // Note: call's run time also depends on number of the retries
+                        if(res.first != null) Measurement.log(client.id, res.second, "Result-$i", res.first!!.responseTopicFence.fence.toGeofence().center.distanceKmTo(loc.second).toString()) // misc shows distance in km in Double format
                         else client.throwSafeException("${client.id}-($i-${loc.first}): NOOOOOOOOOOOOOOO Response! (${res.second}ms)")
                     }
                 }
