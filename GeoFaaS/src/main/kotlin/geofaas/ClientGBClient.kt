@@ -24,7 +24,9 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
         val pubFence = Geofence.circle(location, radiusDegree)
         val subFence = Geofence.circle(location, radiusDegree) // subFence is better to be as narrow as possible (if the client is not moving, zero)
         // Subscribe for the response
-        val subTopics: MutableSet<ListeningTopic>? = subscribeFunction(funcName, subFence)
+        val subTopics: MutableSet<ListeningTopic>? = Measurement.logRuntime(id, "SubFunction", "${location.lat}:${location.lon}"){
+            subscribeFunction(funcName, subFence)
+        }
         if (subTopics == null) // if success, it is either empty or contains newly subscribed functions
             logger.warn("Failed to subscribe to /result and /ack. Assume calling to a wrong broker, continuing...")
 
@@ -36,6 +38,8 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
 
         // call with retries
         val pubStatus = pubCallAndGetAck(message, funcName, pubFence, retries, messageRetryPayload, false)
+//        Measurement.logRuntime(id, "PubCall", "normal;retry=$retries;${location.lat}:${location.lon}"){
+//        }
         logger.debug("pubStatus dump: {}", pubStatus)
 
         // get the result
@@ -43,8 +47,9 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
             StatusCode.Success -> result = listenForResult(resTimeout)
             StatusCode.WrongBroker -> { // processPublishAckSuccess() returns WrongBroker only if there is a brokerInfo
                 // get the result from the suggested broker, published to a wrong broker
-                val changeStatus = changeBroker(pubStatus.second!!)
-                Measurement.log(id, -1, "WrongBroker", pubStatus.second!!.brokerId)
+                val changeStatus = Measurement.logRuntime(id, "WrongBroker", "SwitchedTo;${pubStatus.second!!.brokerId}"){
+                    changeBroker(pubStatus.second!!)
+                }
                 if (changeStatus == StatusCode.Success) { // TODO move all the subscriptions to the new broker? isn't needed now
                     val resultTopic = Topic("functions/$funcName/result")
                     val newSubscribeStatus: StatusCode = subscribe(resultTopic, subFence) // fast forward subscribeFunction() process
@@ -52,12 +57,14 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
                         throwSafeException("Failed to subscribe to '$resultTopic'. StatusCode: $newSubscribeStatus")
 
                     result = listenForResult(resTimeout)
-                    if (result == null) { // only in the case of WrongBroker, do a retry if failed for result
+                    if (result == null) { // Note: only in the case of WrongBroker, do a retry if failed for the result
                         logger.warn("retry Call with the new broker (${pubStatus.second!!.brokerId})")
-                        Measurement.log(id, -1, "Retry;SameBroker", "NoResult")
+                        Measurement.log(id, -1, "RESULT;NoResult", "Retry;NewBroker")
                         val subAckTopic = subscribeFunction(funcName, subFence) // wasn't listening to ack. TODO: prettier wrongbroker handling?
                         if (subAckTopic != null) {
-                            val retryPubStatus = pubCallAndGetAck(messageRetryPayload, funcName, pubFence, retries, messageRetryPayload, false)
+                            val retryPubStatus = pubCallAndGetAck(messageRetryPayload, funcName, pubFence, retries, messageRetryPayload, true)
+//                            Measurement.logRuntime(id, "PubCall;WrongBroker", "retry;retry=$retries;${location.lat}:${location.lon}"){
+//                            }
                             logger.debug("pubStatus dump: {}", retryPubStatus)
                             if (retryPubStatus.first == StatusCode.Success)
                                 result = listenForResult(resTimeout)
@@ -68,7 +75,7 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
             StatusCode.Failure -> {} // do nothing. will retry with the cloud directly
             else -> throwSafeException("Unexpected publish status '${pubStatus.first}'")
         }
-        // Note: no retry for listening for Result
+        // Note: no retry for listening for Result (after receiving an ack)
 
         // Cloud direct call
         if(result == null) {// anything but success
@@ -97,32 +104,36 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
         if(retries < 0)
             return Pair(StatusCode.Failure, null)
         val msg = if(isRetry) retryMessage else message //
-        basicClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call"), pubFence, msg))
-        val pubStatus = listenForPubAckAndProcess(FunctionAction.CALL, funcName, ackTimeout)
+        val pubStatus = Measurement.logRuntime(id, "Published" + if(isRetry) ";Retry" else "", "CALL"){
+            basicClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call"), pubFence, msg))
+            listenForPubAckAndProcess(FunctionAction.CALL, funcName, ackTimeout)
+        }
         when (pubStatus.first){
             StatusCode.WrongBroker -> return pubStatus
             StatusCode.Success -> {
                 // Wait for GeoFaaS's confirmation (Ack)
                 var ackAttempts = getAckAttempts
-                var ackSender :String?
-                do {
-                    ackSender = listenForAck(ackTimeout) // blocking, with timeout
-                    ackAttempts--
-                    if (ackSender == null)
-                        logger.warn("attempts remained for getting an ACK: {}", ackAttempts)
-                } while (ackSender == null && ackAttempts > 0) // retry
+                var ackSender :String? = null
+                Measurement.logRuntime(id, "ACK;received", "GeoFaaS Ack"){
+                    do {
+                        ackSender = listenForAck(ackTimeout) // blocking, with timeout
+                        ackAttempts--
+                        if (ackSender == null)
+                            logger.warn("attempts remained for getting an ACK: {}", ackAttempts)
+                    } while (ackSender == null && ackAttempts > 0) // retry
+                }
 
                 if (ackSender != null){
                     return Pair(StatusCode.Success, null)
                 } else { // retry
                     logger.warn("Retry Call. No Ack from GeoFaaS after calling '$funcName'. $retries retries remained...")
-                    Measurement.log(id, -1, "Retry;$retries retries remained", "NoAck")
+                    Measurement.log(id, -1, "Retry;$retries retries remained;Pub", "NoAck")
                     return pubCallAndGetAck(message, funcName, pubFence, retries - 1, retryMessage, true)
                 }
             }
             else -> { // only 'Failure' is expected, but either way do retry
                 logger.warn("Failed publishing '$funcName' call. $retries retries remained...")
-                Measurement.log(id, -1, "Retry;$retries retries remained", "NotPublished")
+                Measurement.log(id, -1, "Retry;$retries retries remained;Pub", "NotPublished")
                 return pubCallAndGetAck(message, funcName, pubFence, retries - 1, retryMessage, true)
             }
         }
@@ -131,22 +142,24 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
     // For retry by cloud use cases. cloud is listening on 'f1/call/retry'
     private fun retryCallByCloud (messageRetryPayload: String, funcName: String, pubFence: Geofence): StatusCode {
         logger.warn("Calling the cloud directly for '$funcName' call...")
-        Measurement.log(id, -1, "Retry;Cloud", "NoResult")
-        basicClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call/retry"), pubFence, messageRetryPayload))
-        val pubStatus = listenForPubAckAndProcess(FunctionAction.CALL, funcName, ackTimeout)
+        val pubStatus = Measurement.logRuntime(id, "Published", "Cloud;Retry"){
+            basicClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call/retry"), pubFence, messageRetryPayload))
+            listenForPubAckAndProcess(FunctionAction.CALL, funcName, ackTimeout)
+        }
         when (pubStatus.first) {
             StatusCode.WrongBroker -> return StatusCode.Failure // because it is unexpected for the cloud
             StatusCode.Success -> {
                 // Wait for GeoFaaS Cloud's confirmation (Ack)
                 var ackAttempts = getAckAttempts
-                var ackSender :String?
-                do {
-                    ackSender = listenForAck(ackTimeout) // blocking, with timeout
-                    ackAttempts--
-                    if (ackSender == null)
-                        logger.warn("attempts remained for getting the ack from Cloud GeoFaaS: {}", ackAttempts)
-                } while (ackSender == null && ackAttempts > 0) // retry
-
+                var ackSender :String? = null
+                Measurement.logRuntime(id, "Retry;Cloud;Ack", "GeoFaaS Ack"){
+                    do {
+                        ackSender = listenForAck(ackTimeout) // blocking, with timeout
+                        ackAttempts--
+                        if (ackSender == null)
+                            logger.warn("attempts remained for getting the ack from Cloud GeoFaaS: {}", ackAttempts)
+                    } while (ackSender == null && ackAttempts > 0) // retry
+                }
                 if (ackSender != null){
                     return StatusCode.Success
                 } else {
@@ -185,12 +198,14 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
         }
     }
     private fun listenForResult(timeout: Int): FunctionMessage? {
-        var res: FunctionMessage?
+        var res: FunctionMessage? = null
         var resultCounter = 0
-        do {
-            res = listenForFunction("RESULT", timeout)
-            resultCounter++
-        } while (res != null && res.receiverId != id)
+        Measurement.logRuntime(id, "RESULT;Received", "timeout=$timeout"){
+            do {
+                res = listenForFunction("RESULT", timeout)
+                resultCounter++
+            } while (res != null && res!!.receiverId != id)
+        }
         logger.info("{} Message(s) processed when listening for the result", resultCounter)
 
         if(res?.funcAction == FunctionAction.RESULT) return res
