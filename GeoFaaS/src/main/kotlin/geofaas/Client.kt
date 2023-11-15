@@ -107,10 +107,10 @@ suspend fun main() {
 //    println("${client.id} finished!")
     ////////////////////////////////// multiple Moving Clients //////////////////////
     val clientLocPairs = mutableListOf<Pair<Client, List<Pair<String,Location>>>>()
-    clientLocPairs.add(Client(locFranceToPoland.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "Client1") to locFranceToPoland)
-    clientLocPairs.add(Client(locBerlinToFrance.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "Client2") to locBerlinToFrance)
+    clientLocPairs.add(Client(locFranceToPoland.first().second, debug, brokerAddresses["Paris"]!!, 5560, "Client1") to locFranceToPoland)
+    clientLocPairs.add(Client(locBerlinToFrance.first().second, debug, brokerAddresses["Berlin"]!!, 5560, "Client2") to locBerlinToFrance)
     clientLocPairs.add(Client(locFrankParisBerlin.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "Client3") to locFrankParisBerlin)
-    clientLocPairs.add(Client(clientLoc.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "Client4") to clientLoc)
+    clientLocPairs.add(Client(clientLoc.first().second, debug, brokerAddresses["Paris"]!!, 5560, "Client4") to clientLoc)
     coroutineScope {
         clientLocPairs.forEach { clientLocPair ->
             launch {
@@ -126,7 +126,7 @@ suspend fun main() {
                         }
                         val res: Pair<FunctionMessage?, Long> = client.call("sieve",  "$i-${loc.first}|${client.id}")
                         // Note: call's run time also depends on number of the retries
-                        if(res.first != null) Measurement.log(client.id, res.second, "Result-$i", res.first!!.responseTopicFence.fence.toGeofence().center.distanceKmTo(loc.second).toString()) // misc shows distance in km in Double format
+                        if(res.first != null) Measurement.log(client.id, res.second, "Result-$i", loc.second.distanceKmTo(res.first!!.responseTopicFence.fence.toGeofence().center).toString()) // misc shows distance in km in Double format
                         else client.throwSafeException("${client.id}-($i-${loc.first}): NOOOOOOOOOOOOOOO Response! (${res.second}ms)")
                     }
                 }
