@@ -70,7 +70,7 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
                                 result = listenForResult(resTimeout)
                         }
                     }
-                } else throwSafeException("Failed to switch the broker. StatusCode: $changeStatus" )
+                } else throwSafeException("$id failed to switch the broker. StatusCode: $changeStatus" )
             }
             StatusCode.Failure -> {} // do nothing. will retry with the cloud directly
             else -> throwSafeException("Unexpected publish status '${pubStatus.first}'")
