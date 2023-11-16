@@ -80,7 +80,7 @@ messageProcessors = 2
     - `./scripts/upload.sh "test/fns/sieve-of-eratosthenes" "sieve" "nodejs" 1`
     - `./scripts/upload.sh "test/fns/echo-js" "echo" "nodejs" 1`
 - Run Corresponding GeoFaaS Edge (non-optional)
-  - `java -jar GeoFaaSEdge.jar Berlin 1 production` the broker id, number of listening epochs, and running mode
+  - `java -jar GeoFaaSEdge.jar Berlin 1 production false` the broker id, number of listening epochs, running mode, and debug mode
 - Run Cloud
 - Run Client (if any?)
 

@@ -326,15 +326,15 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                         return Pair(StatusCode.Success, pubAck.brokerInfo)
                     } else {
                         logger.fatal("Failed to change the broker. And the previous broker is no longer responsible")
-                        throwSafeException("Error updating the location to $newLoc"); throw RuntimeException() // dummy, to skip return check
+                        throwSafeException("Error updating the $id location to $newLoc"); throw RuntimeException() // dummy, to skip return check
                     }
                 } else {
                     logger.fatal("No broker is responsible for the current location")
-                    throwSafeException("Error updating the location to $newLoc"); throw RuntimeException() // dummy
+                    throwSafeException("Error updating the $id location to $newLoc"); throw RuntimeException() // dummy
                 }
             } else {
                 logger.fatal("unexpected reason code: {}", pubAck.reasonCode)
-                throwSafeException("Error updating the location to $newLoc"); throw RuntimeException() // dummy
+                throwSafeException("Error updating the $id location to $newLoc"); throw RuntimeException() // dummy
             }
         } else if (pubAck is Payload.PINGRESPPayload) {
             if(pubAck.reasonCode == ReasonCode.LocationUpdated) { // success
@@ -347,7 +347,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                 return Pair(StatusCode.NotConnected, null)
             } else {
                 logger.fatal("unexpected reason code: {}", pubAck.reasonCode)
-                throwSafeException("Error updating the location to $newLoc"); throw RuntimeException() // dummy
+                throwSafeException("Error updating the $id location to $newLoc"); throw RuntimeException() // dummy
             }
         } else if (pubAck == null) {
             logger.error("Updating location failed! No response from the '${basicClient.identity}' broker")
