@@ -7,6 +7,7 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.system.measureTimeMillis
+import geofaas.Model.RequestID
 
 object Measurement {
     private val log4j = LogManager.getLogger("measurement") //Note:  console only
@@ -20,14 +21,19 @@ object Measurement {
         throw RuntimeException("Failed to create BufferedWriter for file", e)
     }
     init {
-        bufferedWriter.write("event,who,details,time,timestamp\n")
+        bufferedWriter.write("event,who,details,time,timestamp,requestId\n")
     }
 
-    fun log(who: String, time: Long, event: String, details: String) {
+    fun log(who: String, time: Long, event: String, details: String, reqId: RequestID?) {
         try {
-            log4j.info("$who (${time}ms) [$event]: {$details}")
             val currentTimestamp = timeFormat.format(Date())
-            bufferedWriter.write("$event,$who,$details,$time,$currentTimestamp")
+            if(reqId == null) {
+                log4j.info("$who (${time}ms) [$event]: {$details}")
+                bufferedWriter.write("$event,$who,$details,$time,$currentTimestamp,")
+            } else {
+                log4j.info("$who (${time}ms) [$event]: {$details} req: ${reqId.clientId}-${reqId.reqNum}@${reqId.place}")
+                bufferedWriter.write("$event,$who,$details,$time,$currentTimestamp,${reqId.reqNum};${reqId.place};${reqId.clientId}")
+            }
             bufferedWriter.newLine()
             bufferedWriter.flush()
         } catch (e: IOException) {
@@ -48,12 +54,12 @@ object Measurement {
 //        log4j.info("$who (${time}ms) [$data]: {$misc}")
 //    }
 
-    fun <T> logRuntime(who: String, event: String, details: String, block: () -> T): T {
+    fun <T> logRuntime(who: String, event: String, details: String, reqId: RequestID?, block: () -> T): T {
         val result: T
         val runtime = measureTimeMillis {
             result = block()
         }
-        log(who, runtime, event, details)
+        log(who, runtime, event, details, reqId)
         return result
     }
 }

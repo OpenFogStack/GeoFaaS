@@ -14,6 +14,7 @@ import geofaas.Model.ClientType
 import geofaas.Model.FunctionMessage
 import geofaas.Model.StatusCode
 import geofaas.Model.TypeCode
+import geofaas.Model.RequestID
 import kotlin.system.measureTimeMillis
 
 class Server(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaS-Edge1", brokerAreaManager: BrokerAreaManager) {
@@ -25,9 +26,9 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
     suspend fun registerFaaS(tf: TinyFaasClient): StatusCode {
         val funcs: Set<GeoFaaSFunction>
         val funcListTime = measureTimeMillis { funcs = tf.remoteFunctions()!! }
-        Measurement.log(gbClient.id, funcListTime, "FaaS;getFuncs", funcs.joinToString(separator = ";") { it.name })
+        Measurement.log(gbClient.id, funcListTime, "FaaS;getFuncs", funcs.joinToString(separator = ";") { it.name }, null)
         if (funcs.isNotEmpty()) {
-            val registerSuccess = logRuntime(gbClient.id, "Subscribe Functions", funcs.joinToString(separator = ";") { it.name }){
+            val registerSuccess = logRuntime(gbClient.id, "Subscribe Functions", funcs.joinToString(separator = ";") { it.name }, null){
                 gbClient.registerFunctions(funcs, gbClient.brokerAreaManager.ownBrokerArea.coveredArea)
             }
             return if (registerSuccess == StatusCode.Success) {
@@ -55,28 +56,28 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
                 val distanceToClient = gbClient.location.distanceKmTo(newMsg.responseTopicFence.fence.toGeofence().center)
                 var eventDesc = "newMsg;${newMsg.funcAction}"
                 if (newMsg.typeCode == TypeCode.RETRY) eventDesc += ";Retry"
-                Measurement.log(newMsg.responseTopicFence.senderId,-1,  eventDesc,"${newMsg.funcName}(${newMsg.data});$distanceToClient")
+                Measurement.log(newMsg.responseTopicFence.senderId,-1,  eventDesc,"${newMsg.funcName}(${newMsg.data});$distanceToClient", newMsg.reqId)
                 val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
                 if (newMsg.funcAction == FunctionAction.CALL) { // cloud behave same as Edge, also listening to '/retry'
-                    logRuntime(newMsg.responseTopicFence.senderId, "ACK;sent", newMsg.funcName){ // todo: send the ack after checking if there is any FaaS serving the function and tell the client about it
-                        gbClient.sendAck(newMsg.funcName, clientFence, newMsg.responseTopicFence.senderId) // tell the client you received its request
+                    logRuntime(newMsg.responseTopicFence.senderId, "ACK;sent", newMsg.funcName, newMsg.reqId){ // todo: send the ack after checking if there is any FaaS serving the function and tell the client about it
+                        gbClient.sendAck(newMsg.funcName, clientFence, newMsg.reqId) // tell the client you received its request
                     }
                     val registeredFunctions: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
                     if (newMsg.funcName in registeredFunctions){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
-                        val selectedFaaS: TinyFaasClient = logRuntime(gbClient.id, "Select;FaaS", "between: ${registeredFunctions.joinToString(separator = ";")}") {
+                        val selectedFaaS: TinyFaasClient = logRuntime(gbClient.id, "Select;FaaS", "between: ${registeredFunctions.joinToString(separator = ";")}", newMsg.reqId) {
                             bestAvailFaaS(newMsg.funcName, null)
                         }
                         val response: HttpResponse?
                         val faasTime = measureTimeMillis { response = selectedFaaS.call(newMsg.funcName, newMsg.data) }
-                        Measurement.log(gbClient.id, faasTime, "FaaS;Response", "${newMsg.funcName}(${newMsg.data})")
+                        Measurement.log(gbClient.id, faasTime, "FaaS;Response", "${newMsg.funcName}(${newMsg.data})", newMsg.reqId)
                         logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
 
                         if (gbClient.id == "GeoFaaS-Berlin")
                             logger.warn("Offloading all requests! for test purposes!")
                         if (response != null && gbClient.id != "GeoFaaS-Berlin") {
                             val responseBody: String = response.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
-                            logRuntime(newMsg.responseTopicFence.senderId, "Result;sent", newMsg.funcName){
-                                gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.responseTopicFence.senderId)
+                            logRuntime(newMsg.responseTopicFence.senderId, "Result;sent", newMsg.funcName, newMsg.reqId){
+                                gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.reqId)
                             }
                             logger.info("Sent the result '{}' to functions/${newMsg.funcName}/result for {}", responseBody, newMsg.responseTopicFence.senderId) // wiki: Found 1229 primes under 10000
                         } else { // connection refused?
@@ -89,8 +90,8 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
                                 logger.error("The Client will NOT receive any response! This is end of the line of offloading")
                             else {
                                 logger.warn("Offloading to cloud...")
-                                logRuntime(newMsg.responseTopicFence.senderId, "NACK;sent", "No response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}' Offloading to cloud..."){
-                                    gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence, newMsg.responseTopicFence.senderId, "GeoFaaS-Cloud")
+                                logRuntime(newMsg.responseTopicFence.senderId, "NACK;sent", "No response from the FaaS '${selectedFaaS.host}:${selectedFaaS.port}'. Offloading to cloud...", newMsg.reqId){
+                                    gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence, newMsg.reqId, "GeoFaaS-Cloud")
                                 }
                             }
                         }
@@ -100,8 +101,8 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
                             logger.error("The Client will NOT receive any response! This is end of the line of offloading")
                         else {
                             logger.warn("Offloading to cloud...")
-                            logRuntime(newMsg.responseTopicFence.senderId, "NACK;sent", "No FaaS is serving the '${newMsg.funcName}' function! Offloading to cloud..."){
-                                gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence, newMsg.responseTopicFence.senderId, "GeoFaaS-Cloud")
+                            logRuntime(newMsg.responseTopicFence.senderId, "NACK;sent", "No FaaS is serving the '${newMsg.funcName}' function! Offloading to cloud...", newMsg.reqId){
+                                gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence, newMsg.reqId, "GeoFaaS-Cloud")
                             }
                         }
                     }
@@ -109,19 +110,19 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
 //                gbClient.sendAck(newMsg.funcName, clientFence) // tell the client you received its request
                     val registeredFunctions: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
                     if (newMsg.funcName in registeredFunctions){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
-                        val selectedFaaS: TinyFaasClient = logRuntime(gbClient.id, "Select;FaaS", "between: ${registeredFunctions.joinToString(separator = ";")}") {
+                        val selectedFaaS: TinyFaasClient = logRuntime(gbClient.id, "Select;FaaS", "between: ${registeredFunctions.joinToString(separator = ";")}", newMsg.reqId) {
                             bestAvailFaaS(newMsg.funcName, null)
                         }
                         val response: HttpResponse?
                         val faasTime = measureTimeMillis { response = selectedFaaS.call(newMsg.funcName, newMsg.data) }
-                        Measurement.log(gbClient.id, faasTime, "FaaS;Response", "${newMsg.funcName}(${newMsg.data})")
+                        Measurement.log(gbClient.id, faasTime, "FaaS;Response", "${newMsg.funcName}(${newMsg.data})", newMsg.reqId)
                         logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
 
                         if (response != null) {
                             val responseBody: String = response.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
 //                        GlobalScope.launch{
-                            logRuntime(newMsg.responseTopicFence.senderId, "Result;sent", newMsg.funcName){
-                                gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.responseTopicFence.senderId)
+                            logRuntime(newMsg.responseTopicFence.senderId, "Result;sent", newMsg.funcName, newMsg.reqId){
+                                gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.reqId)
                             }
                             logger.info("Sent the result '{}' to functions/${newMsg.funcName}/result for {}", responseBody, newMsg.responseTopicFence.senderId) // wiki: Found 1229 primes under 10000
 //                        }
@@ -159,11 +160,11 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
 
 suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-registry.json), epochs, and running mode
     println(args[0])
-    Measurement.log(args[0], -1, "Started", args[1])
-    val disgbRegistry = logRuntime(args[0], "init", "Broker registry"){
+    Measurement.log(args[0], -1, "Started", args[1], null)
+    val disgbRegistry = logRuntime(args[0], "init", "Broker registry", null){
         BrokerAreaManager(args[0]) // broker id
     }
-    logRuntime(args[0], "fetch", args[2]) {
+    logRuntime(args[0], "fetch", args[2], null) {
         when (args[2]) { // initialize
             "production" -> disgbRegistry.readFromFile("geobroker/config/disgb-registry.json")
             "intellij"   -> disgbRegistry.readFromFile("GeoBroker-Server/src/main/resources/jfsb/disgb_jfsb.json")
@@ -174,7 +175,7 @@ suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-r
     val brokerInfo = disgbRegistry.ownBrokerInfo
     val brokerArea: Geofence = disgbRegistry.ownBrokerArea.coveredArea // broker area: radius: 2.1
     println(brokerArea.center)
-    Measurement.log(args[0], -1, "Location", "${brokerArea.center.lat}:${brokerArea.center.lon}")
+    Measurement.log(args[0], -1, "Location", "${brokerArea.center.lat}:${brokerArea.center.lon}", null)
     val gf = Server(brokerArea.center, args[3].toBoolean(), brokerInfo.ip, brokerInfo.port, "GeoFaaS-${brokerInfo.brokerId}", brokerAreaManager =  disgbRegistry)
 
     val tf = TinyFaasClient("localhost", 8000)
@@ -185,7 +186,7 @@ suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-r
         listeningThread.start()
         repeat(args[1].toInt()){
             val epocTime = gf.handleNextRequest()
-            Measurement.log(args[0], epocTime, "processed-${it+1}", "last took")
+            Measurement.log(args[0], epocTime, "processed-${it+1}", "last took", null)
         }
         listeningThread.interrupt()
     }

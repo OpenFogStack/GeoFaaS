@@ -13,6 +13,7 @@ import geofaas.Model.GeoFaaSFunction
 import geofaas.Model.ListeningTopic
 import geofaas.Model.ClientType
 import geofaas.Model.StatusCode
+import geofaas.Model.RequestID
 import org.apache.logging.log4j.LogManager
 
 class ServerGBClient(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSServerTest", mode: ClientType, val brokerAreaManager: BrokerAreaManager) :GeoBrokerClient(loc, mode, debug, host, port, id) {
@@ -34,33 +35,33 @@ class ServerGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
     }
 
     // publishes result for a function request
-    fun sendResult(funcName: String, res: String, clientFence: Geofence, clientId: String) {
+    fun sendResult(funcName: String, res: String, clientFence: Geofence, reqId: RequestID) {
         val responseTopicFence = ResponseInfoPatched(id, null, brokerArea.toJson()) // null topic = not listening for any response
-        val message = FunctionMessage(funcName, FunctionAction.RESULT, res, TypeCode.NORMAL, clientId, responseTopicFence)
+        val message = FunctionMessage(reqId, funcName, FunctionAction.RESULT, res, TypeCode.NORMAL, reqId.clientId, responseTopicFence)
         basicClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/result"), clientFence, gson.toJson(message))) // Json.encodeToString(FunctionMessage.serializer(), message)
         val pubStatus = listenForPubAckAndProcess(FunctionAction.RESULT, funcName, 8000)
         if (pubStatus.first != StatusCode.Success)
-            logger.error("Unsuccessful sending Result to $clientId. StatusCode: {}", pubStatus.first)
+            logger.error("Unsuccessful sending Result to ${reqId.clientId}. StatusCode: {}", pubStatus.first)
     }
     // publishes an Acknowledgement for receiving a client's request. the client listening for it
-    fun sendAck(funcName: String, clientFence: Geofence, clientId: String) {
+    fun sendAck(funcName: String, clientFence: Geofence, reqId: RequestID) {
         val responseTopicFence = ResponseInfoPatched(id,null, brokerArea.toJson())
-        val message = FunctionMessage(funcName, FunctionAction.ACK, "", TypeCode.NORMAL, clientId, responseTopicFence)
+        val message = FunctionMessage(reqId, funcName, FunctionAction.ACK, "", TypeCode.NORMAL, reqId.clientId, responseTopicFence)
         basicClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/ack"), clientFence, gson.toJson(message)))
         val pubStatus = listenForPubAckAndProcess(FunctionAction.ACK, funcName, 8000)
         if (pubStatus.first != StatusCode.Success)
-            logger.error("Unsuccessful sending Ack to $clientId. StatusCode: {}", pubStatus.first)
+            logger.error("Unsuccessful sending Ack to ${reqId.clientId}. StatusCode: {}", pubStatus.first)
     }
 
     // publishes a NotAck to offload to the cloud. the cloud listening for it
-    fun sendNack(funcName: String, data: String, clientFence: Geofence, clientId: String, cloudId: String, cloudFence: Geofence = Geofence.circle(Location(0.0, 0.0), 0.1)) {
-        val responseTopicFence = ResponseInfoPatched(clientId, Topic("functions/$funcName/result"), clientFence.toJson())
-        val message = FunctionMessage(funcName, FunctionAction.NACK, data, TypeCode.NORMAL, cloudId, responseTopicFence)
+    fun sendNack(funcName: String, data: String, clientFence: Geofence, reqId: RequestID, cloudId: String, cloudFence: Geofence = Geofence.circle(Location(0.0, 0.0), 0.1)) {
+        val responseTopicFence = ResponseInfoPatched(reqId.clientId, Topic("functions/$funcName/result"), clientFence.toJson())
+        val message = FunctionMessage(reqId, funcName, FunctionAction.NACK, data, TypeCode.NORMAL, cloudId, responseTopicFence)
         basicClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/nack"), cloudFence, gson.toJson(message)))
         val pubStatus = listenForPubAckAndProcess(FunctionAction.NACK, funcName, 8000)
-        if (pubStatus.first == StatusCode.Failure) logger.error("failed to offload $funcName call by $clientId. Is $cloudId online?")
+        if (pubStatus.first == StatusCode.Failure) logger.error("failed to offload $funcName call by ${reqId.clientId}. Is $cloudId online?")
         else if(pubStatus.first != StatusCode.Success)
-            logger.error("Unsuccessful sending Nack to $clientId. StatusCode: {}", pubStatus)
+            logger.error("Unsuccessful sending Nack to ${reqId.clientId}. StatusCode: {}", pubStatus)
     }
 
     fun registerFunctions(functions: Set<GeoFaaSFunction>, fence: Geofence): StatusCode { //FIXME: should update CALL subscriptions in geoBroker when remote FaaS added/removed serving function

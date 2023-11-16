@@ -17,10 +17,12 @@ object Model {
 
     data class GeoFaaSFunction (val name: String)
     data class ListeningTopic(val topic: Topic, val fence: Geofence)
+    data class RequestID(val reqNum: Int, val clientId: String, val place: String)
     data class ResponseInfoPatched(val senderId: String, val topic: Topic?, val fence: String)
     //NOTE: null Topic = not listening for any response
     //NOTE2: the fence is a JSON String, because Geofence is incompatible with GSON and cause stackoverflow
-    data class FunctionMessage (val funcName: String, val funcAction: FunctionAction, val data: String,
-                                val typeCode: TypeCode, val receiverId: String,
+    data class FunctionMessage (val reqId: RequestID,
+                                val funcName: String, val funcAction: FunctionAction,
+                                val data: String, val typeCode: TypeCode, val receiverId: String, // receiverId could be same reqId.ClientID
                                 val responseTopicFence: ResponseInfoPatched)
 }
