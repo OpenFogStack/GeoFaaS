@@ -1,4 +1,4 @@
-package geofaas
+package geofaas.experiment
 
 import org.apache.logging.log4j.LogManager
 import java.io.BufferedWriter
@@ -32,7 +32,7 @@ object Measurement {
                 bufferedWriter.write("$event,$who,$details,$time,$currentTimestamp,")
             } else {
                 log4j.info("$who (${time}ms) [$event]: {$details} req: ${reqId.clientId}-${reqId.reqNum}@${reqId.place}")
-                bufferedWriter.write("$event,$who,$details,$time,$currentTimestamp,${reqId.reqNum};${reqId.place};${reqId.clientId}")
+                bufferedWriter.write("$event,$who,$details,$time,$currentTimestamp,${reqId.reqNum};${reqId.clientId};${reqId.place}")
             }
             bufferedWriter.newLine()
             bufferedWriter.flush()

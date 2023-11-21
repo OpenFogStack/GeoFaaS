@@ -14,6 +14,7 @@ import geofaas.Model.ListeningTopic
 import geofaas.Model.ResponseInfoPatched
 import geofaas.Model.StatusCode
 import geofaas.Model.RequestID
+import geofaas.experiment.Measurement
 import org.apache.logging.log4j.LogManager
 
 class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "ClientGeoFaaS1", private val ackTimeout: Int = 8000, private val resTimeout: Int = 3000): GeoBrokerClient(loc, ClientType.CLIENT, debug, host, port, id) {

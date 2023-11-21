@@ -3,9 +3,8 @@ package geofaas
 import de.hasenburg.geobroker.commons.model.spatial.Geofence
 import de.hasenburg.geobroker.commons.model.spatial.Location
 import de.hasenburg.geobroker.commons.model.spatial.toGeofence
-import de.hasenburg.geobroker.commons.model.spatial.toLocation
 import org.apache.logging.log4j.LogManager
-import geofaas.Measurement.logRuntime
+import geofaas.experiment.Measurement.logRuntime
 import io.ktor.client.call.*
 import io.ktor.client.statement.*
 import geofaas.Model.FunctionAction
@@ -14,7 +13,7 @@ import geofaas.Model.ClientType
 import geofaas.Model.FunctionMessage
 import geofaas.Model.StatusCode
 import geofaas.Model.TypeCode
-import geofaas.Model.RequestID
+import geofaas.experiment.Measurement
 import kotlin.system.measureTimeMillis
 
 class Server(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaS-Edge1", brokerAreaManager: BrokerAreaManager) {
