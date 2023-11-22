@@ -57,4 +57,7 @@ object Commons {
         "Berlin" to "192.168.0.116",
         "Cloud" to "192.168.0.206",
         "Local" to "localhost")
+
+    /** Misc */
+    val debug = false
 }
