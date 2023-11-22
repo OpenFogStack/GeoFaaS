@@ -66,15 +66,15 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
                         val selectedFaaS: TinyFaasClient = logRuntime(gbClient.id, "Select;FaaS", "between: ${registeredFunctions.joinToString(separator = ";")}", newMsg.reqId) {
                             bestAvailFaaS(newMsg.funcName, null)
                         }
-                        val response: HttpResponse?
+                        val response: Pair<HttpResponse?, Boolean>
                         val faasTime = measureTimeMillis { response = selectedFaaS.call(newMsg.funcName, newMsg.data) }
                         Measurement.log(gbClient.id, faasTime, "FaaS;Response", "${newMsg.funcName}(${newMsg.data})", newMsg.reqId)
                         logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
 
                         if (gbClient.id == "GeoFaaS-Berlin")
                             logger.warn("Offloading all requests! for test purposes!")
-                        if (response != null && gbClient.id != "GeoFaaS-Berlin") {
-                            val responseBody: String = response.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
+                        if (response.first != null && response.second && gbClient.id != "GeoFaaS-Berlin") {
+                            val responseBody: String = response.first!!.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
                             logRuntime(newMsg.responseTopicFence.senderId, "Result;sent", newMsg.funcName, newMsg.reqId){
                                 gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.reqId)
                             }
@@ -84,7 +84,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
     //                        val response2 = selectedFaaS.call(newMsg.funcName, newMsg.data)
     //                        logger.debug("FaaS's raw Response: {}", response2)
                             //TODO call another FaaS and if there is no more FaaS serving the func, offload
-                            logger.error("No response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}'")
+                            logger.error("No/Bad response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}'")
                             if(mode == ClientType.CLOUD)
                                 logger.error("The Client will NOT receive any response! This is end of the line of offloading")
                             else {
@@ -112,13 +112,13 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
                         val selectedFaaS: TinyFaasClient = logRuntime(gbClient.id, "Select;FaaS", "between: ${registeredFunctions.joinToString(separator = ";")}", newMsg.reqId) {
                             bestAvailFaaS(newMsg.funcName, null)
                         }
-                        val response: HttpResponse?
+                        val response: Pair<HttpResponse?, Boolean>
                         val faasTime = measureTimeMillis { response = selectedFaaS.call(newMsg.funcName, newMsg.data) }
                         Measurement.log(gbClient.id, faasTime, "FaaS;Response", "${newMsg.funcName}(${newMsg.data})", newMsg.reqId)
                         logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
 
-                        if (response != null) {
-                            val responseBody: String = response.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
+                        if (response.first != null && response.second) {
+                            val responseBody: String = response.first!!.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
 //                        GlobalScope.launch{
                             logRuntime(newMsg.responseTopicFence.senderId, "Result;sent", newMsg.funcName, newMsg.reqId){
                                 gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.reqId)
@@ -126,7 +126,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
                             logger.info("Sent the result '{}' to functions/${newMsg.funcName}/result for {}", responseBody, newMsg.responseTopicFence.senderId) // wiki: Found 1229 primes under 10000
 //                        }
                         } else { // connection refused?
-                            logger.error("No response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}'")
+                            logger.error("No/Bad response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}'")
 //                        gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence)
                         }
                     } else {
@@ -166,8 +166,8 @@ suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-r
     logRuntime(args[0], "fetch", args[2], null) {
         when (args[2]) { // initialize
             "production" -> disgbRegistry.readFromFile("geobroker/config/disgb-registry.json")
-            "intellij"   -> disgbRegistry.readFromFile("GeoFaaS/src/main/resources/DisGB-Config/AllServers-WLAN/disgb-registry.json")
-            "localjar"   -> disgbRegistry.readFromFile("../../GeoFaaS/src/main/resources/DisGB-Config/AllServers-WLAN/disgb-registry.json")
+            "intellij"   -> disgbRegistry.readFromFile("GeoFaaS/src/main/resources/DisGB-Config/DistanceScenarioLocal/disgb-registry.json")
+            "localjar"   -> disgbRegistry.readFromFile("../../GeoFaaS/src/main/resources/DisGB-Config/DistanceScenarioLocal/disgb-registry.json")
             else -> throw RuntimeException("Wrong running mode. please specify any of 'production', 'localjar', or 'intellij'")
         }
     }

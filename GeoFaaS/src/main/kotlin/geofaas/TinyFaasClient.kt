@@ -24,19 +24,19 @@ class TinyFaasClient (val host: String, val port: Int, private var functionsLoca
         install(Logging)
      }
 
-    suspend fun call(funcName: String, data: String): HttpResponse? {
+    suspend fun call(funcName: String, data: String): Pair<HttpResponse?, Boolean> {
         return try {
             val response = client.post("http://$host:$port/$funcName") {
                 url {
                     parameters.append("data", data)
                 }
             }
-            respValidator(response)
-            response
+            val isValid = respValidator(response)
+            Pair(response, isValid)
         } catch (e: Throwable) {
             //Fixme handle HttpResponse[http://localhost:8000/sieve, 500 Internal Server Error]
             logger.error("calling '$host:$port/$funcName' failed. {}", e.message)
-            null
+            Pair(null, false)
         }
     }
 
