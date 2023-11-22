@@ -1,0 +1,32 @@
+[
+	{
+		"responsibleBroker": {
+			"brokerId": "TUBerlin",
+			"ip": "localhost",
+			"port": 5560
+		},
+		"coveredArea": {
+			"WKT": "BUFFER (POINT (13.326164 52.513413), 0.1)"
+		}
+	},
+	{
+		"responsibleBroker": {
+			"brokerId": "Potsdam",
+			"ip": "localhost",
+			"port": 5559
+		},
+		"coveredArea": {
+			"WKT": "BUFFER (POINT (13.067207 52.391552), 0.1)"
+		}
+	},
+	{
+		"responsibleBroker": {
+			"brokerId": "Cloud",
+			"ip": "localhost",
+			"port": 5558
+		},
+		"coveredArea": {
+			"WKT" : "ENVELOPE (-180, 180, 90, -90)"
+		}
+	}
+]

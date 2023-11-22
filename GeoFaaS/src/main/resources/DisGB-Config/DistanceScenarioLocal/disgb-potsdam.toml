@@ -1,0 +1,11 @@
+## server information
+[server]
+brokerId = "Potsdam"
+port = 5559
+granularity = 5
+messageProcessors = 2
+
+[server.mode]
+name = "disgb_subscriberMatching"
+brokerAreaFilePath = "GeoFaaS/src/main/resources/DisGB-Config/DistanceScenarioLocal/disgb-registry.json"
+brokerCommunicators = 2

@@ -45,7 +45,20 @@ object Commons {
         "South Paris" to Location(48.502048,2.812500),
         "North Paris" to Location(49.453843,1.735840),
     )
-
+    // Scenarios' locations
+    val locScenario1 = listOf("Pankow" to Location(52.565708,13.402634),
+        "Wedding" to Location(52.549010,13.342552),
+        "Charlottenburg Palace" to Location(52.520713,13.294315),
+        "Grunewald" to Location(52.488634,13.254318),
+        "Steglitz" to Location(52.452871,13.316116),
+        "Zehlendorf" to Location(52.435607,13.260326),
+        "Kleinmachnow" to Location(52.414566,13.206940), // enters potsdam broker area
+        "Duppeler Forst" to Location(52.401790,13.157158),
+        "Babelsberg" to Location(52.403885,13.092270), // inside Potsdam city
+        "Bornim" to Location(52.423779,13.016739),
+        "Fahrland" to Location(52.469188,13.002663),
+        "Ketzin" to Location(52.479017,12.883873),
+    )
 
     /** Broker Addresses */
     val brokerAddresses = mapOf("Frankfurt" to "141.23.28.205", "FrankfurtW" to "192.168.0.125", // WLAN address

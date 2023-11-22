@@ -1,0 +1,10 @@
+[server]
+brokerId = "TUBerlin"
+port = 5560
+granularity = 5
+messageProcessors = 2
+
+[server.mode]
+name = "disgb_subscriberMatching"
+brokerAreaFilePath = "GeoFaaS/src/main/resources/DisGB-Config/DistanceScenarioLocal/disgb-registry.json"
+brokerCommunicators = 2
