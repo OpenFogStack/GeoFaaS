@@ -470,9 +470,11 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
     protected fun logPublishAck(pubAck: Payload.PUBACKPayload, logMsg: String): Boolean {
         // logMsg: "GeoBroker's 'Publish ACK' for the '$funcName' ACK by $id: {}"
         when (pubAck.reasonCode) {
+            // Successes:
             ReasonCode.GrantedQoS0 -> logger.debug(logMsg, pubAck)
             ReasonCode.Success -> logger.debug(logMsg, pubAck)
             ReasonCode.NoMatchingSubscribersButForwarded -> logger.warn(logMsg, pubAck.reasonCode)
+            // Failures:
             ReasonCode.NoMatchingSubscribers -> {
                 logger.error("$logMsg. Terminating..?", pubAck.reasonCode)
                 return false
