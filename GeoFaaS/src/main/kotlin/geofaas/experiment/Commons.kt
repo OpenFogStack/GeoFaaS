@@ -46,16 +46,12 @@ object Commons {
         "North Paris" to Location(49.453843,1.735840),
     )
 
+
     /** Broker Addresses */
-    val brokerAddresses = mapOf("Frankfurt" to "141.23.28.205",
-        "Paris" to "141.23.28.208",
-        "Berlin" to "141.23.28.207",
-        "Cloud" to "141.23.28.209",
-        "Local" to "localhost")
-    val brokerAddressesWifi = mapOf("Frankfurt" to "192.168.0.125",
-        "Paris" to "192.168.0.122",
-        "Berlin" to "192.168.0.116",
-        "Cloud" to "192.168.0.206",
+    val brokerAddresses = mapOf("Frankfurt" to "141.23.28.205", "FrankfurtW" to "192.168.0.125", // WLAN address
+        "Paris" to "141.23.28.208", "ParisW" to "192.168.0.122",
+        "Berlin" to "141.23.28.207", "BerlinW" to "192.168.0.116",
+        "Cloud" to "141.23.28.209", "CloudW" to "192.168.0.206",
         "Local" to "localhost")
 
     /** Misc */

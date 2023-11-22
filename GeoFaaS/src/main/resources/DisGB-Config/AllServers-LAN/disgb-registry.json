@@ -1,0 +1,42 @@
+[
+	{
+		"responsibleBroker": {
+			"brokerId": "Frankfurt",
+			"ip": "141.23.28.205",
+			"port": 5560
+		},
+		"coveredArea": {
+			"WKT": "BUFFER (POINT (8.663124 50.106732), 2.1)"
+		}
+	},
+	{
+		"responsibleBroker": {
+			"brokerId": "Paris",
+			"ip": "141.23.28.208",
+			"port": 5560
+		},
+		"coveredArea": {
+			"WKT": "BUFFER (POINT (2.359708 48.877366), 2.1)"
+		}
+	},
+	{
+		"responsibleBroker": {
+			"brokerId": "Berlin",
+			"ip": "141.23.28.207",
+			"port": 5560
+		},
+		"coveredArea":{
+			"WKT": "BUFFER (POINT (13.326620 52.513557), 2.1)"
+		}
+	},
+	{
+		"responsibleBroker" : {
+			"brokerId" : "Cloud",
+			"ip" : "141.23.28.209",
+			"port" : 5560
+		},
+		"coveredArea" : {
+			"WKT" : "ENVELOPE (-180, 180, 90, -90)"
+		}
+	}
+]

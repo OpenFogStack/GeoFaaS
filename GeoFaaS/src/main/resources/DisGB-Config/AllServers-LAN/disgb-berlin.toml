@@ -1,0 +1,11 @@
+[server]
+brokerId = "Berlin"
+port = 5560
+granularity = 5
+messageProcessors = 2
+
+[server.mode]
+name = "disgb_subscriberMatching"
+#    name = "disgb_publisherMatching"
+brokerAreaFilePath = "config/disgb-registry.json"
+brokerCommunicators = 2

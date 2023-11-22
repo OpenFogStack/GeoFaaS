@@ -6,11 +6,10 @@ import geofaas.Model.FunctionMessage
 import geofaas.Model.RequestID
 import kotlin.system.measureTimeMillis
 
-val debug = false
-val locations = Commons.locBerlinToFrance
+val locations = Commons.locBerlinToFrance //TODO: more points. realistic base on km per second
 fun main() {
-    val client = Client(locations.first().second, debug,
-        Commons.brokerAddressesWifi["Paris"]!!, 5560, "ClientScenario1")
+    val client = Client(locations.first().second, Commons.debug,
+        Commons.brokerAddresses["ParisW"]!!, 5560, "ClientScenario1")
     Measurement.log(client.id, -1, "Started at", locations.first().first, null)
 
     val elapsed = measureTimeMillis {

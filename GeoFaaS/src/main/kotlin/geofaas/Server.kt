@@ -166,8 +166,8 @@ suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-r
     logRuntime(args[0], "fetch", args[2], null) {
         when (args[2]) { // initialize
             "production" -> disgbRegistry.readFromFile("geobroker/config/disgb-registry.json")
-            "intellij"   -> disgbRegistry.readFromFile("GeoBroker-Server/src/main/resources/jfsb/disgb_jfsb.json")
-            "localjar"   -> disgbRegistry.readFromFile("../../GeoBroker-Server/src/main/resources/jfsb/disgb_jfsb.json")
+            "intellij"   -> disgbRegistry.readFromFile("GeoFaaS/src/main/resources/DisGB-Config/AllServers-WLAN/disgb-registry.json")
+            "localjar"   -> disgbRegistry.readFromFile("../../GeoFaaS/src/main/resources/DisGB-Config/AllServers-WLAN/disgb-registry.json")
             else -> throw RuntimeException("Wrong running mode. please specify any of 'production', 'localjar', or 'intellij'")
         }
     }
