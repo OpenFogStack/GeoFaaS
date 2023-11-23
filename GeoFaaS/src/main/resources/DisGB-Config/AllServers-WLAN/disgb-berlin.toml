@@ -1,5 +1,5 @@
 [server]
-brokerId = "Berlin"
+brokerId = "Berlin" # raspberry beta
 port = 5560
 granularity = 5
 messageProcessors = 2

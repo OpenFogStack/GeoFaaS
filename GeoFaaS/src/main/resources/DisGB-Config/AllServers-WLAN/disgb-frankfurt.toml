@@ -1,6 +1,6 @@
 # server information
 [server]
-brokerId = "Frankfurt"
+brokerId = "Frankfurt" #raspberry alpha
 port = 5560
 granularity = 5
 messageProcessors = 2
