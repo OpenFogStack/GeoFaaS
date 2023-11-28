@@ -7,7 +7,7 @@ A middleware between [Geobroker](https://github.com/MoeweX/geobroker) (or DisGB)
 ### An editor instead of `vi`? Helix or NeoVim! , and `tmux` for remote administrations. Plus `bat`, a better `cat`!
 ```
 sudo apt update
-sudo apt install -y neovim libavutil-dev tmux bat
+sudo apt install -y neovim libavutil-dev tmux bat git-core
 ```
 ### `java`
 ```
@@ -20,16 +20,16 @@ mkdir ~/src && cd ~/src
 wget https://go.dev/dl/go1.20.6.linux-arm64.tar.gz #for raspberries
 sudo tar -C /usr/local -xzf go1.20.6.linux-arm64.tar.gz 
 rm go1.20.6.linux-arm64.tar.gz
-hx ~/.profile # for helix edior, alternatively vim or nano, etc.
+hx ~/.profile # on helix edior, alternatively vim or nano, etc.
 # add these two below lines and save, then 'source ~.profile' from terminal: 
   # PATH=$PATH:/usr/local/go/bin   and 
   # GOPATH=$HOME/go
   # alias bat="batcat"
 ```
 ### Docker 
-- [official recipe for raspberry pi](https://docs.docker.com/engine/install/raspberry-pi-os/#install-using-the-repository)
-- [same for debian](https://docs.docker.com/engine/install/debian/). you can install both latest or specific version of docker
-- I needed to add current user to the docker group and logout/login. `sudo usermod -aG docker ${USER}`. Check the [post install steps](https://docs.docker.com/engine/install/linux-postinstall/)
+- [Official recipe for raspberry pi](https://docs.docker.com/engine/install/raspberry-pi-os/#install-using-the-repository)
+- [For debian](https://docs.docker.com/engine/install/debian/). you can install both latest or specific version of docker
+- I needed to add current user to the docker group and logout/login. `sudo usermod -aG docker ${USER}`. For more, check the [post install steps](https://docs.docker.com/engine/install/linux-postinstall/)
 
 ### Setup codes (To be updated)
 ```
@@ -42,9 +42,12 @@ cd tinyFaaS && make
 cd tinyFaaS && ./scripts/upload.sh "test/fns/sieve-of-eratosthenes" "sieve" "nodejs" 1 && cd .. 
 mkdir geobroker && mkdir geobroker/config
 
-# FIXME. upload geobroker server Jar from your pc
+# Setup geobroker server Jar + configs from your pc
 scp GeoBroker-Server.jar raspi-alpha:~/Documents/geobroker
-scp ../src/main/resources/jfsb/disgb_jfsb.json raspi-beta:Documents/geobroker/config/disgb-registry.json 
+scp GeoFaaS/src/main/resources/DisGB-Config/DistanceScenario-WLAN/disgb-registry.json raspi-beta:Documents/geobroker/config/disgb-registry.json
+
+# Setup GeoFaaS Jar
+scp GeoFaaS/out/GeoFaaSServer.jar raspi-beta-wlan:Documents/ 
 ```
 Make a config file for geoBroker server `nvim geobroker/config/disgb-berlin.toml`
 ```toml
@@ -61,7 +64,7 @@ messageProcessors = 2
     brokerAreaFilePath = "config/disgb-registry.json"
     brokerCommunicators = 2
 ```
-- The geoBroker's client names matter, as it will skip event geo-check for "GeoFaaS-" servers, and skip subscription checking 
+- GeoFaaS servers will have a name starting with "GeoFaaS-" (e.g. "GeoFaaS-Berlin"). The geoBroker's client names matter, as GeoBroker will skip event geo-check for "GeoFaaS-" subscribers, and skip subscription checking 
 - 'granularity' is the accuracy for location queries. the bigger, the smaller tiles of world map, therefore more accuracy.
 - 'messageProcessors' is the number of ZMQ message processors (check DisGBSubscriberMatchingServerLogic.java)
 - 'brokerCommunicators' is the number of ZMQ message communicators; is also a parameter used in each message processor and broker communicator (ZMQProcessStarter.java)
@@ -80,12 +83,16 @@ messageProcessors = 2
     - `./scripts/upload.sh "test/fns/sieve-of-eratosthenes" "sieve" "nodejs" 1`
     - `./scripts/upload.sh "test/fns/echo-js" "echo" "nodejs" 1`
 - Run Corresponding GeoFaaS Edge (non-optional)
-  - `java -jar GeoFaaSEdge.jar Berlin 1 production false` the broker id, number of listening epochs, running mode, and debug mode
+  - `java -jar GeoFaaSServer.jar Berlin 1 production false` params: the broker id, number of listening requests before exit, running mode, and debug mode
 - Run Cloud
 - Run Client (if any?)
 
 ### Development tools
 - [Draw lat:long + radius on map](https://www.freemaptools.com/radius-around-point.htm)
+- [Draw tool 2](http://bboxfinder.com)
+- [Draw Tool 3 (GeoJSON)](https://geojson.io/)
+- [Hexagon Grid System](https://github.com/basonjui/hexagon-grid-system)
+- [GeoJSON to WKT](https://geojson-to-wkt-converter.onrender.com)
 - for some strange reasons the broker areas in `<disgb-server-config>.json` are defined as first "long" then lat; Well-known text (WKT) format : `BUFFER (POINT (long lat), radius)`, that means reverse of common pair and also `Location.kt`
 - geoBroker areas work unexpected. they seem to be bigger than the default radius 2.1 (KM?). geoBroker areas intersect with its clients far away (but not very far)
 
