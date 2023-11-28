@@ -45,6 +45,7 @@ object Commons {
         "South Paris" to Location(48.502048,2.812500),
         "North Paris" to Location(49.453843,1.735840),
     )
+
     // Scenarios' locations
     val locScenario1 = listOf("Pankow" to Location(52.565708,13.402634),
         "Wedding" to Location(52.549010,13.342552),
@@ -52,16 +53,16 @@ object Commons {
         "Grunewald" to Location(52.488634,13.254318),
         "Steglitz" to Location(52.452871,13.316116),
         "Zehlendorf" to Location(52.435607,13.260326),
-        "Kleinmachnow" to Location(52.414566,13.206940), // enters potsdam broker area
-        "Duppeler Forst" to Location(52.401790,13.157158),
+        "Kleinmachnow" to Location(52.414566,13.206940),
+        "Duppeler Forst" to Location(52.401790,13.157158), // switches to potsdam broker
         "Babelsberg" to Location(52.403885,13.092270), // inside Potsdam city
         "Bornim" to Location(52.423779,13.016739),
         "Fahrland" to Location(52.469188,13.002663),
-        "Ketzin" to Location(52.479017,12.883873),
+        "Ketzin" to Location(52.479017,12.883873), // switches to cloud
     )
 
-    /** Broker Addresses */
-    val brokerAddresses = mapOf("Frankfurt" to "141.23.28.205", "FrankfurtW" to "192.168.0.125", // WLAN address
+    /** Broker Addresses for first connection */
+    val brokerAddresses = mapOf("Frankfurt" to "141.23.28.205", "FrankfurtW" to "192.168.0.125", // LAN/WLAN address
         "Paris" to "141.23.28.208", "ParisW" to "192.168.0.122",
         "Berlin" to "141.23.28.207", "BerlinW" to "192.168.0.116",
         "Cloud" to "141.23.28.209", "CloudW" to "192.168.0.206",

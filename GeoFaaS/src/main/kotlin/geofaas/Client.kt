@@ -35,7 +35,7 @@ class Client(loc: Location, debug: Boolean, host: String, port: Int, id: String 
         val retries = 1 //2
         val result: FunctionMessage?
         val elapsed = measureTimeMillis {
-            result = gbClient.callFunction(funcName, param, retries, 0.1, reqId)
+            result = gbClient.callFunction(funcName, param, retries, 0.01, reqId)
         }
         if (result == null)
             logger.error("No result received after {} retries! {}ms", retries, elapsed)
