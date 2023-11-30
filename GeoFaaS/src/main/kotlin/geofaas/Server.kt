@@ -173,9 +173,10 @@ suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-r
     }
     val brokerInfo = disgbRegistry.ownBrokerInfo
     val brokerArea: Geofence = disgbRegistry.ownBrokerArea.coveredArea // broker area with radius in  hundred km
-    println(brokerArea.center)
+    val location = if(args[0] == "Cloud") Location(53.343660,-6.254740) else brokerArea.center
+    println(location)
     Measurement.log(args[0], -1, "BrokerArea", brokerArea.toString(), null)
-    val gf = Server(brokerArea.center, args[3].toBoolean(), brokerInfo.ip, brokerInfo.port, "GeoFaaS-${brokerInfo.brokerId}", brokerAreaManager =  disgbRegistry)
+    val gf = Server(location, args[3].toBoolean(), brokerInfo.ip, brokerInfo.port, "GeoFaaS-${brokerInfo.brokerId}", brokerAreaManager =  disgbRegistry)
 
     val tf = TinyFaasClient("localhost", 8000)
     val registerSuccess = gf.registerFaaS(tf)

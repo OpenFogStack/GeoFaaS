@@ -1,0 +1,10 @@
+[server]
+brokerId = "Cloud" # aws
+port = 5560
+granularity = 5
+messageProcessors = 2
+
+[server.mode]
+name = "disgb_subscriberMatching"
+brokerAreaFilePath = "config/disgb-registry.json"
+brokerCommunicators = 2

@@ -54,7 +54,7 @@ class ServerGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
     }
 
     // publishes a NotAck to offload to the cloud. the cloud listening for it
-    fun sendNack(funcName: String, data: String, clientFence: Geofence, reqId: RequestID, cloudId: String, cloudFence: Geofence = Geofence.circle(Location(0.0, 0.0), 0.1)) {
+    fun sendNack(funcName: String, data: String, clientFence: Geofence, reqId: RequestID, cloudId: String, cloudFence: Geofence = Geofence.world()) {
         val responseTopicFence = ResponseInfoPatched(reqId.clientId, Topic("functions/$funcName/result"), clientFence.toJson())
         val message = FunctionMessage(reqId, funcName, FunctionAction.NACK, data, TypeCode.NORMAL, cloudId, responseTopicFence)
         basicClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/nack"), cloudFence, gson.toJson(message)))

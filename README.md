@@ -6,8 +6,7 @@ A middleware between [Geobroker](https://github.com/MoeweX/geobroker) (or DisGB)
 ## Remote server setup
 ### An editor instead of `vi`? Helix or NeoVim! , and `tmux` for remote administrations. Plus `bat`, a better `cat`!
 ```
-sudo apt update
-sudo apt install -y neovim libavutil-dev tmux bat git-core
+sudo apt update && sudo apt install -y neovim libavutil-dev tmux bat git-core make zip # the last 3 are dependencies
 ```
 ### `java`
 ```
@@ -18,18 +17,21 @@ sudo apt install default-jdk
 ```
 mkdir ~/src && cd ~/src
 wget https://go.dev/dl/go1.20.6.linux-arm64.tar.gz #for raspberries
+wget https://go.dev/dl/go1.20.6.linux-amd64.tar.gz #for amd based (cloud)
 sudo tar -C /usr/local -xzf go1.20.6.linux-arm64.tar.gz 
-rm go1.20.6.linux-arm64.tar.gz
+rm go1.20.6.linux-arm64.tar.gz && cd .. && rmdir src/
 hx ~/.profile # on helix edior, alternatively vim or nano, etc.
-# add these two below lines and save, then 'source ~.profile' from terminal: 
-  # PATH=$PATH:/usr/local/go/bin   and 
-  # GOPATH=$HOME/go
-  # alias bat="batcat"
+```
+add these two below lines and save, then `source ~.profile` from terminal: 
+```
+   PATH=$PATH:/usr/local/go/bin  
+   GOPATH=$HOME/go
+   alias bat="batcat"
 ```
 ### Docker 
 - [Official recipe for raspberry pi](https://docs.docker.com/engine/install/raspberry-pi-os/#install-using-the-repository)
 - [For debian](https://docs.docker.com/engine/install/debian/). you can install both latest or specific version of docker
-- I needed to add current user to the docker group and logout/login. `sudo usermod -aG docker ${USER}`. For more, check the [post install steps](https://docs.docker.com/engine/install/linux-postinstall/)
+- I needed to add current user to the docker group and logout/login. `sudo groupadd docker` and `sudo usermod -aG docker ${USER}`. For more, check the [post install steps](https://docs.docker.com/engine/install/linux-postinstall/)
 
 ### Setup codes (To be updated)
 ```
