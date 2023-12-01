@@ -8,8 +8,8 @@ import geofaas.Model.FunctionMessage
 import geofaas.Model.RequestID
 import kotlin.system.measureTimeMillis
 
-val locations = Commons.locScenario1
 fun main() {
+    val locations = Commons.locScenario1
     val client = Client(locations.first().second, Commons.debug,
         Commons.brokerAddresses["Berlin"]!!, 5560, "C1Scenario1")
     Measurement.log(client.id, -1, "Started at", locations.first().first, null)

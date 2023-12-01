@@ -1,7 +1,16 @@
 # Scenario One: Distance/Latency 
 
 ## Setup
+### traffic control
+we used linux's traffic control `tc` to add 5ms network latency (10ms round trip) for inter-Edge Server connection  
+- run the `latency_setup.sh <net-interface> <other-broker-ip> <additional latency in ms>` 
+- allow non-root user to run tc commands: `setcap cap_net_admin+ep /usr/sbin/tc`
+
 ### Servers
+- Cloud
+  - Location: `53.343660,-6.254740`
+  - Service Area:
+    - Whole world
 - TUBerlin:
   - Location: `52.510057,13.325043`
   - Service Area: 
@@ -187,7 +196,8 @@
         "circumradius": 20000,
         "inradius": 17320.508075688773,
         "name": "TUB Broker"
-      }
+      },
+      "id": 0
     },
     {
       "type": "Feature",
@@ -327,7 +337,8 @@
           52.414566
         ],
         "type": "Point"
-      }
+      },
+      "id": 8
     },
     {
       "type": "Feature",
@@ -403,6 +414,19 @@
         "coordinates": [
           12.883873,
           52.479017
+        ],
+        "type": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Havel"
+      },
+      "geometry": {
+        "coordinates": [
+          12.811737,
+          52.477408
         ],
         "type": "Point"
       }
