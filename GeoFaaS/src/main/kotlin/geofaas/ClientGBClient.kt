@@ -118,7 +118,7 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
                 var ackSender :String? = null
                 Measurement.logRuntime(id, "ACK;received", "timeout=$ackTimeout", reqId){
                     do {
-                        ackSender = listenForAck(ackTimeout) // blocking, with timeout
+                        ackSender = listenForAck(ackTimeout, reqId) // blocking, with timeout
                         ackAttempts--
                         if (ackSender == null)
                             logger.warn("attempts remained for getting an ACK: {}", ackAttempts)
@@ -156,7 +156,7 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
                 var ackSender :String? = null
                 Measurement.logRuntime(id, "Retry;Cloud;Ack", "GeoFaaS Ack", reqId){
                     do {
-                        ackSender = listenForAck(ackTimeout) // blocking, with timeout
+                        ackSender = listenForAck(ackTimeout, reqId) // blocking, with timeout
                         ackAttempts--
                         if (ackSender == null)
                             logger.warn("attempts remained for getting the ack from Cloud GeoFaaS: {}", ackAttempts)
@@ -178,12 +178,12 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
     }
 
     // Returns the ack's sender id or null
-    private fun listenForAck(timeout: Int): String? {
+    private fun listenForAck(timeout: Int, reqId: RequestID): String? {
         // Wait for GeoFaaS's response
         var ack: FunctionMessage?
         do {
             ack = listenForFunction("ACK", timeout)
-        } while (ack != null && ack.receiverId != id) // post-process receiver-id. as in pub/sub you may also need messages with other receiver ids
+        } while (ack != null && ack.reqId != reqId)//ack.receiverId != id) // post-process receiver-id. as in pub/sub you may also need messages with other receiver ids
 
         if (ack != null) {
             if (ack.funcAction == FunctionAction.ACK) {
@@ -206,7 +206,7 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
             do {
                 res = listenForFunction("RESULT", timeout)
                 resultCounter++
-            } while (res != null && res!!.receiverId != id)
+            } while (res != null && res!!.reqId != reqId)//res!!.receiverId != id)
         }
         logger.info("{} Message(s) processed when listening for the result", resultCounter)
 
