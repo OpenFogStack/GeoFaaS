@@ -35,17 +35,22 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         basicClient.send(Payload.CONNECTPayload(location)) // connect
         var connAck = basicClient.receiveWithTimeout(8000)
 
-        val connStatus = processConnAckSuccess(connAck, BrokerInfo(basicClient.identity, host, port), true)
+        val connStatus = processConnAckSuccess(connAck, BrokerInfo("<Unknown>", host, port), true)
         if (connStatus == StatusCode.Failure) {
             if (connAck is Payload.DISCONNECTPayload) {
                 if(connAck.brokerInfo == null) { // retry with suggested broker
-                    if(connAck.reasonCode == ReasonCode.ProtocolError)
-                        logger.fatal("Duplicate ids! $id can't connect to the remote geoBroker '$host:$port'.")
-                    else if (connAck.reasonCode == ReasonCode.WrongBroker) // the connAck.Broker info is null
-                        logger.fatal("No responsible broker found! while $id tried to connect to the remote geoBroker '$host:$port'.")
-                    else
-                        logger.fatal("Duplicate ids! $id can't connect to the remote geoBroker '$host:$port'.")
-                    throwSafeException("Error while connecting to the geoBroker")
+                    if(connAck.reasonCode == ReasonCode.ProtocolError){
+                        logger.warn("Duplicate id! $id can't connect to the remote geoBroker '$host:$port'. Retrying...")
+                        basicClient.send(Payload.CONNECTPayload(location)) // connect
+                        connAck = basicClient.receiveWithTimeout(8000)
+                        //reconnect but ignore the connAck
+                    } else {
+                        if (connAck.reasonCode == ReasonCode.WrongBroker) // the connAck.Broker info is null
+                            logger.fatal("No responsible broker found! while $id tried to connect to the remote geoBroker '$host:$port'.")
+                        else
+                            logger.fatal("Unexpected Error ${connAck.reasonCode}! $id can't connect to the remote geoBroker '$host:$port'.")
+                        throwSafeException("Error while connecting to the geoBroker")
+                    }
                 }
             } else if (connAck == null) {
                 throwSafeException("Timeout! can't connect to geobroker $host:$port. Check the Address and try again")
@@ -234,51 +239,71 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
 
     fun listenForFunction(type: String, timeout: Int): FunctionMessage? {
         // wiki: function call/ack/nack/result
-        val msg: Payload?
+        val msgPayload: Payload?
+        val expectedAction = if (mode == ClientType.CLOUD) null else FunctionAction.valueOf(type) // cloud has two expected action
         when(mode) { // GeoFaaS server uses a thread for listening
             ClientType.CLIENT -> {
                 val dequeuedPub = pubQueue.poll()
                 if (dequeuedPub == null) {
                     logger.info("Listening for a GeoFaaS '$type'...")
-                    msg = when (timeout){
+                    msgPayload = when (timeout){
                         0 -> basicClient.receive() // blocking
                         else -> basicClient.receiveWithTimeout(timeout) // returns null after expiry
                     }
-                    if (timeout > 0 && msg == null) {
+                    if (timeout > 0 && msgPayload == null) {
                         logger.error("Listening timeout (${timeout}ms)! pubQueue size:{}", pubQueue.size)
                         return null
                     }
-                    logger.debug("gB EVENT: {}", msg)
+                    logger.debug("gB EVENT: {}", msgPayload)
                 } else {
-                    msg = dequeuedPub
+                    msgPayload = dequeuedPub
                     logger.debug("Pub queue's size is ${pubQueue.size}. dequeued: {}", dequeuedPub)
                 }
             }
             else -> { // GeoFaaS Edge/Cloud
                 logger.info("Waiting for a GeoFaaS '$type'...")
-                msg = pubQueue.take() // blocking
-                logger.debug("Pub queue's size is ${pubQueue.size}. dequeued: {}", msg)
+                msgPayload = pubQueue.take() // blocking
+                logger.debug("Pub queue's size is ${pubQueue.size}. dequeued: {}", msgPayload)
             }
         }
 
-        if (msg is Payload.PUBLISHPayload) {
+        if (msgPayload is Payload.PUBLISHPayload) {
 // wiki:    msg.topic    => Topic(topic=functions/f1/call)
 // wiki:    msg.content  => message
 // wiki:    msg.geofence => BUFFER (POINT (0 0), 2)
-            val topic = msg.topic.topic.split("/")
+            val topic = msgPayload.topic.topic.split("/")
             if(topic.first() == "functions") {
-                val message = gson.fromJson(msg.content, FunctionMessage::class.java) // return FunctionMessage(funcName, FunctionAction.valueOf(funcAction), msg.content, Model.TypeCode.Piggy)
-                return message
+                val message = gson.fromJson(msgPayload.content, FunctionMessage::class.java)
+                when(mode) {
+                    ClientType.CLOUD -> {
+                        return if (message.funcAction == FunctionAction.NACK || message.funcAction == FunctionAction.CALL)
+                            message
+                        else {
+                            logger.error("{} expected, but received a {}. Pushing it to the pubQueue again.pubQueue size: {}", type, message.funcAction, pubQueue.size)
+                            pubQueue.add(msgPayload)
+                            null
+                        }
+                    }
+                    else -> {
+                        return if (message.funcAction == expectedAction)
+                            message
+                        else {
+                            logger.error("{} expected, but received a {}. Pushing it to the pubQueue again.pubQueue size: {}", type, message.funcAction, pubQueue.size)
+                            pubQueue.add(msgPayload)
+                            null
+                        }
+                    }
+                }
             } else {
-                logger.error("msg is not related to the functions! {}", msg.topic.topic)
+                logger.error("msg is not related to the functions! {}", msgPayload.topic.topic)
                 return null
             }
-        } else if(msg == null) {
+        } else if(msgPayload == null) {
             logger.error("Expected a PUBLISHPayload, but null received from geoBroker!")
             return null
         } else {
-            ackQueue.add(msg)
-            logger.warn("Not a PUBLISHPayload! adding it to the 'ackQueue'. dump: {}", msg)
+            ackQueue.add(msgPayload)
+            logger.warn("Not a PUBLISHPayload! adding it to the 'ackQueue'. dump: {}", msgPayload)
             return null
         }
     }
@@ -410,6 +435,11 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             logger.fatal("ProcessManager reported that processes are still running: {}",
                 processManager.incompleteZMQProcesses)
         }
+        val queueSizesMsg = "$id: (pubQueue: ${pubQueue.size}, ackQueue: ${ackQueue.size})"
+        if (pubQueue.size + ackQueue.size == 0)
+            logger.debug(queueSizesMsg)
+        else
+            logger.warn(queueSizesMsg)
 //        exitProcess(0) // terminates current process
     }
 
@@ -445,7 +475,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         if (pubAck is Payload.PUBACKPayload) {
             val noError = logPublishAck(pubAck, logMsg) // logs the reasonCode
             if (noError) return Pair(StatusCode.Success, null)
-            else logger.error("${pubAck.reasonCode}! 'Publish ACK' received for '$funcName' $funcAct by '$id'")
+            else logger.error("${pubAck.reasonCode}! $id's'Publish ACK' received for '$funcName' $funcAct")
         } else if(pubAck is Payload.DISCONNECTPayload && pubAck.brokerInfo != null)
             return Pair(StatusCode.WrongBroker, pubAck.brokerInfo) // disconnect payload when publishing to a wrong broker
           else if (pubAck == null && withTimeout) {
