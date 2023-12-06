@@ -14,6 +14,8 @@ import geofaas.Model.FunctionMessage
 import geofaas.Model.StatusCode
 import geofaas.Model.TypeCode
 import geofaas.experiment.Measurement
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlin.system.measureTimeMillis
 
 class Server(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaS-Edge1", brokerAreaManager: BrokerAreaManager) {
@@ -21,6 +23,9 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
     private val mode = if(id == "GeoFaaS-Cloud") ClientType.CLOUD else ClientType.EDGE
     private val gbClient = ServerGBClient(loc, debug, host, port, id, mode, brokerAreaManager)
     private var faasRegistry = mutableListOf<TinyFaasClient>()
+    private val listeningThread = Thread {  collectNewMessages() }
+    private var state :Boolean = false
+
     // returns success if success to Subscribe to all the functions
     suspend fun registerFaaS(tf: TinyFaasClient): StatusCode {
         val funcs: Set<GeoFaaSFunction>
@@ -46,10 +51,36 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
         }
     }
 
-    // returns run time
-    suspend fun handleNextRequest(): Long {
+    suspend fun run(serverName: String, epocs: Int){
+        state = true
+        listeningThread.start()
+        logger.info("Receiving incoming messages from geoBroker")
         val listeningMsg = if (mode == ClientType.CLOUD) "CALL(/retry) or NACK" else "CALL"
-        val newMsg :FunctionMessage? = gbClient.listenForFunction(listeningMsg, 0) // blocking
+        coroutineScope {
+            repeat(epocs) {
+                val newMsg :FunctionMessage? = gbClient.listenForFunction(listeningMsg, 0) // blocking
+                launch {
+                    val epocTime = handleNextRequest(newMsg)
+                    Measurement.log(serverName, epocTime, "processed-${it+1}", "last took", null)
+                }
+            }
+        }
+        shutdown()
+    }
+    fun shutdown() {
+        logger.info("Shutting down GeoFaaS")
+        state = false
+        gbClient.terminate()
+        faasRegistry.clear()
+        Measurement.close()
+        listeningThread.interrupt()
+        logger.info("GeoFaaS properly shutdown")
+    }
+
+    // returns run time
+    private suspend fun handleNextRequest(newMsg :FunctionMessage?): Long {
+//        val listeningMsg = if (mode == ClientType.CLOUD) "CALL(/retry) or NACK" else "CALL"
+//        val newMsg :FunctionMessage? = gbClient.listenForFunction(listeningMsg, 0) // blocking
         return measureTimeMillis {
             if (newMsg != null) {
                 val distanceToClient = gbClient.location.distanceKmTo(newMsg.responseTopicFence.fence.toGeofence().center)
@@ -57,10 +88,12 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
                 if (newMsg.typeCode == TypeCode.RETRY) eventDesc += ";Retry"
                 Measurement.log(newMsg.responseTopicFence.senderId,-1,  eventDesc,"${newMsg.funcName}(${newMsg.data});$distanceToClient", newMsg.reqId)
                 val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
+
                 if (newMsg.funcAction == FunctionAction.CALL) { // cloud behave same as Edge, also listening to '/retry'
                     logRuntime(newMsg.responseTopicFence.senderId, "ACK;sent", newMsg.funcName, newMsg.reqId){ // todo: send the ack after checking if there is any FaaS serving the function and tell the client about it
                         gbClient.sendAck(newMsg.funcName, clientFence, newMsg.reqId) // tell the client you received its request
                     }
+                    // FaaS
                     val registeredFunctions: List<String> = faasRegistry.flatMap { tf -> tf.functions().map { func -> func.name } }.distinct()
                     if (newMsg.funcName in registeredFunctions){ // I will not check if the request is for a subscribed topic (function), because otherwise geobroker won't deliver it
                         val selectedFaaS: TinyFaasClient = logRuntime(gbClient.id, "Select;FaaS", "between: ${registeredFunctions.joinToString(separator = ";")}", newMsg.reqId) {
@@ -71,6 +104,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
                         Measurement.log(gbClient.id, faasTime, "FaaS;Response", "${newMsg.funcName}(${newMsg.data})", newMsg.reqId)
                         logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
 
+                        // handle the Result
                         if (gbClient.id == "GeoFaaS-Berlin")
                             logger.warn("Offloading all requests! for test purposes!")
                         if (response.first != null && response.second && gbClient.id != "GeoFaaS-Berlin") {
@@ -83,7 +117,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
     //                        val selectedFaaS2: TinyFaasClient = bestAvailFaaS(newMsg.funcName, listOf(selectedFaaS)) // 2nd best faas
     //                        val response2 = selectedFaaS.call(newMsg.funcName, newMsg.data)
     //                        logger.debug("FaaS's raw Response: {}", response2)
-                            //TODO call another FaaS and if there is no more FaaS serving the func, offload
+                            //TODO call another FaaS or offload if there is no more FaaS serving the func
                             logger.error("No/Bad response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}'")
                             if(mode == ClientType.CLOUD)
                                 logger.error("The Client will NOT receive any response! This is end of the line of offloading")
@@ -139,14 +173,10 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
             }
         }
     }
-    fun collectNewMessages() { // blocking
-        gbClient.asyncListen()
+    private fun collectNewMessages() { // blocking
+        do{ gbClient.asyncListen() } while (state)
     }
-    fun shutdown() {
-        gbClient.terminate()
-        faasRegistry.clear()
-        Measurement.close()
-    }
+
     private fun bestAvailFaaS(funcName: String, except: List<TinyFaasClient>?): TinyFaasClient {
         val availableServers: List<TinyFaasClient> = faasRegistry.filter { tf -> tf.isServingFunction(funcName) }
         if (except == null)
@@ -172,23 +202,17 @@ suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-r
         }
     }
     val brokerInfo = disgbRegistry.ownBrokerInfo
-    val brokerArea: Geofence = disgbRegistry.ownBrokerArea.coveredArea // broker area with radius in  hundred km
+    val brokerArea: Geofence = disgbRegistry.ownBrokerArea.coveredArea
     val location = if(args[0] == "Cloud") Location(53.343660,-6.254740) else brokerArea.center
     println(location)
-    Measurement.log(args[0], -1, "BrokerArea", brokerArea.toString(), null)
-    val gf = Server(location, args[3].toBoolean(), brokerInfo.ip, brokerInfo.port, "GeoFaaS-${brokerInfo.brokerId}", brokerAreaManager =  disgbRegistry)
+    Measurement.log(args[0], -1, "BrokerArea", brokerArea.toString().replace(',', ';'), null)
+    val geofaas = Server(location, args[3].toBoolean(), brokerInfo.ip, brokerInfo.port, "GeoFaaS-${brokerInfo.brokerId}", brokerAreaManager =  disgbRegistry)
 
     val tf = TinyFaasClient("localhost", 8000)
-    val registerSuccess = gf.registerFaaS(tf)
+    val registerSuccess = geofaas.registerFaaS(tf)
 
-    val listeningThread = Thread { do { gf.collectNewMessages() } while (true) }
     if (registerSuccess == StatusCode.Success) {
-        listeningThread.start()
-        repeat(args[1].toInt()){
-            val epocTime = gf.handleNextRequest()
-            Measurement.log(args[0], epocTime, "processed-${it+1}", "last took", null)
-        }
-        listeningThread.interrupt()
+        geofaas.run(args[0], args[1].toInt())
     }
-    gf.shutdown()
+//    geofaas.shutdown()
 }
