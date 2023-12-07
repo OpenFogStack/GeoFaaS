@@ -19,25 +19,28 @@ import org.apache.logging.log4j.LogManager
 class ServerGBClient(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSServerTest", mode: ClientType, val brokerAreaManager: BrokerAreaManager) :GeoBrokerClient(loc, mode, debug, host, port, id) {
     private val logger = LogManager.getLogger()
     private val brokerArea: Geofence = brokerAreaManager.ownBrokerArea.coveredArea //Note: parsing geoFaaS's brokerAreaManager Geofence to geobroker Geofence
-
+    var receivedPubs = 0; var receivedHandshakes = 0
     // to asynchronously fill the queues with new messages
     fun asyncListen() { // blocking
         when (val newMessage = basicClient.receive()) {
             is Payload.PUBLISHPayload -> {
                 pubQueue.add(newMessage)
                 logger.debug("incoming Pub added to pubQueue. dump: {}", newMessage)
+                receivedPubs++
             }
             else -> {
                 ackQueue.add(newMessage)
                 logger.debug("incoming msg added to ackQueue. dump: {}", newMessage)
+                receivedHandshakes++
             }
         }
     }
 
     // publishes result for a function request
-    fun sendResult(funcName: String, res: String, clientFence: Geofence, reqId: RequestID) {
+    fun sendResult(funcName: String, res: String, clientFence: Geofence, reqId: RequestID, isOffload: Boolean = false) {
+        val type = if(isOffload) TypeCode.OFFLOAD else TypeCode.NORMAL
         val responseTopicFence = ResponseInfoPatched(id, null, brokerArea.toJson()) // null topic = not listening for any response
-        val message = FunctionMessage(reqId, funcName, FunctionAction.RESULT, res, TypeCode.NORMAL, reqId.clientId, responseTopicFence)
+        val message = FunctionMessage(reqId, funcName, FunctionAction.RESULT, res, type, reqId.clientId, responseTopicFence)
         basicClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/result"), clientFence, gson.toJson(message))) // Json.encodeToString(FunctionMessage.serializer(), message)
         val pubStatus = listenForPubAckAndProcess(FunctionAction.RESULT, funcName, 8000)
         if (pubStatus.first != StatusCode.Success)

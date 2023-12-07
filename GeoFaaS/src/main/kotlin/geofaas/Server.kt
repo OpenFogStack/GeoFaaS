@@ -72,8 +72,9 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
         state = false
         gbClient.terminate()
         faasRegistry.clear()
-        Measurement.close()
         listeningThread.interrupt()
+        Measurement.log(gbClient.id, -1, "totalReceivedMsg", "${gbClient.receivedPubs};${gbClient.receivedHandshakes}", null)
+        Measurement.close()
         logger.info("GeoFaaS properly shutdown")
     }
 
@@ -155,7 +156,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
                             val responseBody: String = response.first!!.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
 //                        GlobalScope.launch{
                             logRuntime(newMsg.responseTopicFence.senderId, "Result;sent", newMsg.funcName, newMsg.reqId){
-                                gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.reqId)
+                                gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.reqId, true)
                             }
                             logger.info("Sent the result '{}' to functions/${newMsg.funcName}/result for {}", responseBody, newMsg.responseTopicFence.senderId) // wiki: Found 1229 primes under 10000
 //                        }

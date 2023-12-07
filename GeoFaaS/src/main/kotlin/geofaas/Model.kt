@@ -6,7 +6,7 @@ import de.hasenburg.geobroker.commons.model.spatial.Geofence
 object Model {
     enum class ClientType { EDGE, CLIENT, CLOUD }
     enum class FunctionAction { ACK, NACK, CALL, RESULT }
-    enum class TypeCode { NORMAL, RETRY }
+    enum class TypeCode { NORMAL, RETRY, OFFLOAD }
 
     enum class StatusCode { Success, Failure, // common
         AlreadyExist, NotExist,               // for Sub/unSub

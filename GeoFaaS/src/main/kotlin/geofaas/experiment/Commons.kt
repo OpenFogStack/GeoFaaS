@@ -59,11 +59,48 @@ object Commons {
         "Bornim" to Location(52.423779,13.016739),
         "Fahrland" to Location(52.469188,13.002663),
         "Ketzin" to Location(52.479017,12.883873), // switches to cloud
+        "Havel" to Location(52.477408, 12.811737)
+    )
+    val locScenario2 = listOf(
+        "Pots1" to Location(52.420943, 12.957593),
+        "Pots2" to Location(52.243407, 13.110622),
+        "Pots3" to Location(52.256774, 12.983982),
+        "Pots4" to Location(52.352012, 13.171031),
+        "Pots5" to Location(52.450150, 13.121540),
+        "Pots6" to Location(52.343565, 12.921389),
+        "Pots7" to Location(52.479416, 13.013094),
+        "Pots8" to Location(52.370235, 13.051669),
+        "Pots9" to Location(52.305309, 13.052397),
+        "Pots10" to Location(52.213984, 12.992716),
+        "Pots11" to Location(52.441918, 13.116519),
+        "Pots12" to Location(52.226793, 13.146610),
+        "Pots13" to Location(52.249713, 13.050892),
+        "Pots14" to Location(52.383379, 12.988094),
+        "Pots15" to Location(52.461356, 13.007009),
+        "Pots16" to Location(52.319371, 12.904111),
+    )
+    val locScenario3 = listOf(
+        "Pots1" to Location(52.420943, 12.957593),
+        "Pots2" to Location(52.243407, 13.110622),
+        "Pots3" to Location(52.256774, 12.983982),
+        "Pots4" to Location(52.352012, 13.171031),
+        "Pots5" to Location(52.450150, 13.121540),
+//        "Pots6" to Location(52.343565, 12.921389),
+//        "Pots7" to Location(52.479416, 13.013094),
+//        "Pots8" to Location(52.370235, 13.051669),
+//        "Pots9" to Location(52.305309, 13.052397),
+//        "Pots10" to Location(52.213984, 12.992716),
+//        "Pots11" to Location(52.441918, 13.116519),
+//        "Pots12" to Location(52.226793, 13.146610),
+//        "Pots13" to Location(52.249713, 13.050892),
+//        "Pots14" to Location(52.383379, 12.988094),
+//        "Pots15" to Location(52.461356, 13.007009),
+//        "Pots16" to Location(52.319371, 12.904111),
     )
 
     /** Broker Addresses for first connection */
     val brokerAddresses = mapOf("Frankfurt" to "141.23.28.205", "FrankfurtW" to "192.168.0.125", // LAN/WLAN address
-        "Paris" to "141.23.28.208", "ParisW" to "192.168.0.122",
+        "Paris" to "141.23.28.208", "ParisW" to "192.168.0.122", "Potsdam" to "141.23.28.208",
         "Berlin" to "141.23.28.207", "BerlinW" to "192.168.0.116",
         "Cloud" to "141.23.28.209", "CloudW" to "192.168.0.206",
         "Local" to "localhost")
