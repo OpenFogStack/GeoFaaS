@@ -14,6 +14,7 @@ import geofaas.Model.ListeningTopic
 import geofaas.Model.ClientType
 import geofaas.Model.FunctionAction
 import geofaas.Model.StatusCode
+import geofaas.experiment.Measurement
 import org.apache.logging.log4j.Level
 import org.apache.logging.log4j.LogManager
 import java.util.*
@@ -440,6 +441,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             logger.debug(queueSizesMsg)
         else
             logger.warn(queueSizesMsg)
+        Measurement.log(id, -1, "Queues(Pub/ack)", "${pubQueue.size};${ackQueue.size}", null)
 //        exitProcess(0) // terminates current process
     }
 
