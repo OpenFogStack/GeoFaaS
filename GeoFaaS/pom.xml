@@ -158,12 +158,12 @@
                         </goals>
                     </execution>
                     <execution>
-                        <id>GeoFaaSClient-HighLoadScenario</id>
+                        <id>GeoFaaSClient-HighloadScenario</id>
                         <configuration>
                             <appendAssemblyId>false</appendAssemblyId>
                             <archive>
                                 <manifest>
-                                    <mainClass>geofaas.experiment.Scenariohighload_oldKt</mainClass>
+                                    <mainClass>geofaas.experiment.ScenarioHighloadKt</mainClass>
                                 </manifest>
                                 <manifestEntries>
                                     <Multi-Release>true</Multi-Release>
@@ -172,7 +172,7 @@
                             <descriptorRefs>
                                 <descriptorRef>jar-with-dependencies</descriptorRef>
                             </descriptorRefs>
-                            <finalName>ClientGeoFaaS-HighLoadScenario</finalName>
+                            <finalName>ClientGeoFaaS-HighloadScenario</finalName>
                         </configuration>
                         <phase>package</phase>
                         <goals>
