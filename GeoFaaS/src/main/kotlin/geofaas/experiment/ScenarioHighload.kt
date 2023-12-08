@@ -41,7 +41,7 @@ suspend fun main(args: Array<String>) {
                     }
                 }
                 client.shutdown()
-                Measurement.log(client.id, elapsed, "Finished", "$numRequests total locations", null)
+                Measurement.log(client.id, elapsed, "Finished", "$numRequests requests", null)
                 Measurement.log(client.id, elapsed, "byCloud/Edge", "$cloudCounter;$edgeCounter", null)
             }
         }
