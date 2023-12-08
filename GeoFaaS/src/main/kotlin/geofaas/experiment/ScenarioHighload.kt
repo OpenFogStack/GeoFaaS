@@ -13,7 +13,7 @@ suspend fun main(args: Array<String>) {
     val clientsLocPair = mutableListOf<Pair<Client, Pair<String, Location>>>()
     clientsLocPair.addAll(
         locations.mapIndexed { i, p ->
-            Client(p.second, Commons.debug, Commons.brokerAddresses["Potsdam"]!!, 5560, "Client${i+1}") to p
+            Client(p.second, Commons.debug, Commons.brokerAddresses["Potsdam"]!!, 5560, "Client${i+1}", 4000, 18000) to p
         }
     )
     coroutineScope {

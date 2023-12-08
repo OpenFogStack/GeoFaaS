@@ -16,9 +16,11 @@ import geofaas.experiment.Commons.locFranceToPoland
 import geofaas.experiment.Commons.locFrankParisBerlin
 import geofaas.experiment.Measurement
 
-class Client(loc: Location, debug: Boolean, host: String, port: Int, id: String = "ClientGeoFaaS1") {
+class Client(loc: Location, debug: Boolean, host: String, port: Int, id: String = "ClientGeoFaaS1", ackTimeout: Int = 8000, resTimeout: Int = 4000) {
     private val logger = LogManager.getLogger()
-    private val gbClient = ClientGBClient(loc, debug, host, port, id, 8000, 3000)
+    private val gbClient = ClientGBClient(loc, debug, host, port, id, ackTimeout, resTimeout)
+    private val radius = 0.001
+    private val retries = 1 //2
     val id
         get() = gbClient.id
 
@@ -32,10 +34,9 @@ class Client(loc: Location, debug: Boolean, host: String, port: Int, id: String 
 
     // returns a pair of result and run time
     fun call(funcName: String, param: String, reqId: RequestID): Pair<FunctionMessage?, Long> {
-        val retries = 1 //2
         val result: FunctionMessage?
         val elapsed = measureTimeMillis {
-            result = gbClient.callFunction(funcName, param, retries, 0.01, reqId)
+            result = gbClient.callFunction(funcName, param, retries, radius, reqId)
         }
         if (result == null)
             logger.error("No result received after {} retries! {}ms", retries, elapsed)
@@ -63,7 +64,7 @@ suspend fun main() {
 //    client.shutdown()
 //    println("${client.id} finished!")
 
-    /////////////////2 local 2 nodes//////
+    /////////////////2 local nodes//////
     val client1 = Client(clientLoc[3].second, debug, brokerAddresses["Local"]!!, 5560, "client1")
     Measurement.log(client1.id, -1, "Started at", clientLoc[3].first, null)
     sleepNoLog(2000, 0)

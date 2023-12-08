@@ -1,7 +1,6 @@
 package geofaas.experiment
 
 import de.hasenburg.geobroker.commons.model.spatial.Location
-import de.hasenburg.geobroker.commons.model.spatial.toGeofence
 import geofaas.Client
 import geofaas.Model.FunctionMessage
 import geofaas.Model.RequestID
@@ -14,7 +13,7 @@ suspend fun main(args: Array<String>) {
     val clientsLocPair = mutableListOf<Pair<Client, Pair<String, Location>>>()
     clientsLocPair.addAll(
         locations.mapIndexed { i, p ->
-            Client(p.second, Commons.debug, Commons.brokerAddresses["Potsdam"]!!, 5560, "Client$i") to p
+            Client(p.second, Commons.debug, Commons.brokerAddresses["Potsdam"]!!, 5560, "Client${i+1}", 8000, 3000) to p
         }
     )
     coroutineScope {
@@ -37,7 +36,7 @@ suspend fun main(args: Array<String>) {
                                 cloudCounter++
                             else edgeCounter++
                             Measurement.log(client.id, res.second, "Done", serverInfo.senderId+";${res.first!!.typeCode}", reqId)
-                        } // misc shows distance in km in Double format
+                        } // details shows responder server name and type of response (offload, or normal)
                         else client.throwSafeException("${client.id}-($i-${locPair.first}): NOOOOOOOOOOOOOOO Response! (${res.second}ms)")
                     }
                 }
