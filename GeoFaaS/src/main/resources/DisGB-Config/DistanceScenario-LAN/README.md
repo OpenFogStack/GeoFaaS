@@ -1,14 +1,19 @@
 # Scenario One: Distance/Latency 
 
+Shows that the geo-distribution is transparent to moving clients by showing the latency footprint of handovers and client's distance to cloud/edge
+
 ## Setup
 ### traffic control
 we used linux's traffic control `tc` to add 5ms network latency (10ms round trip) for inter-Edge Server connection  
 - run the `latency_setup.sh <net-interface> <other-broker-ip> <additional latency in ms>` 
 - allow non-root user to run tc commands: `setcap cap_net_admin+ep /usr/sbin/tc`
 
+### Client
+- a moving client from Pankow region in Berlin to far west of Potsdam
+- the client calls the sieve function once per location, and after location update
 ### Servers
 - Cloud
-  - Location: `53.343660,-6.254740`
+  - Location: `53.343660,-6.254740` (Dublin)
   - Service Area:
     - Whole world
 - TUBerlin:
@@ -68,7 +73,7 @@ we used linux's traffic control `tc` to add 5ms network latency (10ms round trip
         "inradius": 17320.508075688773
       }
     }
-  ```
+    ```
   
 - Potsdam:
   - Location: `52.354199, 13.055874`
