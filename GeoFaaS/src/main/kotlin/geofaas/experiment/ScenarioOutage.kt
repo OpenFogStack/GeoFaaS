@@ -10,6 +10,6 @@ fun main(args: Array<String>) {
     FaultToleranceScenarios.runThreaded(
         numClients, numRequests,
         locations,
-        2000, 4000, 0, 1
+        1000, 4000, 1, 1
     )
 }
