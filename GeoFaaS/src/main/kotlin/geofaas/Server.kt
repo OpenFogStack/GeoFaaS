@@ -29,7 +29,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
     private var faasRegistry = mutableListOf<TinyFaasClient>()
     private val listeningThread = Thread {  collectNewMessages() }
     private var state :Boolean = false
-    private var receivedCalls = AtomicInteger(); private var receivedNacks = AtomicInteger()
+    private var receivedCalls = AtomicInteger(); private var receivedNacks = AtomicInteger(); private var receivedRetries = AtomicInteger()
 
     // returns success if success to Subscribe to all the functions
     suspend fun registerFaaS(tf: TinyFaasClient): StatusCode {
@@ -81,8 +81,8 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
         faasRegistry.clear()
         listeningThread.interrupt()
         Measurement.log(gbClient.id, -1, "totalReceivedMsg(GF/gB)", "${gbClient.receivedPubs.get()};${gbClient.receivedHandshakes.get()}", null)
-        Measurement.log(gbClient.id, -1, "recieved calls/nacks", "$receivedCalls;$receivedNacks", null)
-//        receivedCalls = 0; receivedNacks = 0
+        Measurement.log(gbClient.id, -1, "received calls/nacks", "$receivedCalls;$receivedNacks", null)
+        Measurement.log(gbClient.id, -1, "received retries", receivedRetries.get().toString(), null)
         Measurement.close()
         logger.info("GeoFaaS properly shutdown")
     }
@@ -95,7 +95,10 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
             if (newMsg != null) {
                 val distanceToClient = gbClient.location.distanceKmTo(newMsg.responseTopicFence.fence.toGeofence().center)
                 var eventDesc = "newMsg;${newMsg.funcAction}"
-                if (newMsg.typeCode == TypeCode.RETRY) eventDesc += ";Retry"
+                if (newMsg.typeCode == TypeCode.RETRY) {
+                    receivedRetries.incrementAndGet()
+                    eventDesc += ";Retry"
+                }
                 Measurement.log(newMsg.responseTopicFence.senderId,-1,  eventDesc,"${newMsg.funcName}(${newMsg.data});$distanceToClient", newMsg.reqId)
                 val clientFence = newMsg.responseTopicFence.fence.toGeofence() // JSON to Geofence
 
