@@ -15,23 +15,24 @@ import geofaas.Model.ClientType
 import geofaas.Model.StatusCode
 import geofaas.Model.RequestID
 import org.apache.logging.log4j.LogManager
+import java.util.concurrent.atomic.AtomicInteger
 
 class ServerGBClient(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "GeoFaaSServerTest", mode: ClientType, val brokerAreaManager: BrokerAreaManager) :GeoBrokerClient(loc, mode, debug, host, port, id) {
     private val logger = LogManager.getLogger()
     private val brokerArea: Geofence = brokerAreaManager.ownBrokerArea.coveredArea //Note: parsing geoFaaS's brokerAreaManager Geofence to geobroker Geofence
-    var receivedPubs = 0; var receivedHandshakes = 0
+    var receivedPubs = AtomicInteger(); var receivedHandshakes = AtomicInteger()
     // to asynchronously fill the queues with new messages
     fun asyncListen() { // blocking
         when (val newMessage = basicClient.receive()) {
             is Payload.PUBLISHPayload -> {
                 pubQueue.add(newMessage)
                 logger.debug("incoming Pub added to pubQueue. dump: {}", newMessage)
-                receivedPubs++
+                receivedPubs.incrementAndGet()
             }
             else -> {
                 ackQueue.add(newMessage)
                 logger.debug("incoming msg added to ackQueue. dump: {}", newMessage)
-                receivedHandshakes++
+                receivedHandshakes.incrementAndGet()
             }
         }
     }
