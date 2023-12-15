@@ -16,11 +16,12 @@ import geofaas.experiment.Commons.locFranceToPoland
 import geofaas.experiment.Commons.locFrankParisBerlin
 import geofaas.experiment.Measurement
 
-class Client(loc: Location, debug: Boolean, host: String, port: Int, id: String = "ClientGeoFaaS1", ackTimeout: Int = 8000, resTimeout: Int = 4000) {
+class Client(loc: Location, debug: Boolean, host: String, port: Int, id: String = "ClientGeoFaaS1", ackTimeout: Int = 8000, resTimeout: Int = 4000,
+             private val retries: Int = 1
+) {
     private val logger = LogManager.getLogger()
     private val gbClient = ClientGBClient(loc, debug, host, port, id, ackTimeout, resTimeout)
     private val radius = 0.001
-    private val retries = 1 //2
     val id
         get() = gbClient.id
 
