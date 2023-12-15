@@ -59,7 +59,9 @@ object Commons {
         "Bornim" to Location(52.423779,13.016739),
         "Fahrland" to Location(52.469188,13.002663),
         "Ketzin" to Location(52.479017,12.883873), // switches to cloud
-        "Havel" to Location(52.477408, 12.811737)
+        "Havel" to Location(52.477408, 12.811737),
+        "Havel2" to Location(52.462820, 12.740869),
+        "Havel3" to Location(52.448292, 12.691420)
     )
     val locScenario2 = listOf(
         "Pots1" to Location(52.420943, 12.957593),

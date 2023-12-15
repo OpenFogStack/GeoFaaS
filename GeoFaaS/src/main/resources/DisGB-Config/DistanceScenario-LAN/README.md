@@ -1,8 +1,12 @@
 # Scenario One: Distance/Latency 
 
-Shows that the geo-distribution is transparent to moving clients by showing the latency footprint of handovers and client's distance to cloud/edge
+Shows that the geo-distribution is transparent to moving clients by showing the latency footprint of handovers and client's distance to cloud/edge.
 
 ## Setup
+- 2 edge brokers, with a 5ms latency in between (each trip)
+- cloud broker in Dublin (30ms ping, ec2 4vCpu, 8gb RAM). set the location to Trinity college of Dublin
+- no artificial latency between client and Edges
+- the client moves from pankow to west of potsdam. hand overs visible by dots
 ### traffic control
 we used linux's traffic control `tc` to add 5ms network latency (10ms round trip) for inter-Edge Server connection  
 - run the `latency_setup.sh <net-interface> <other-broker-ip> <additional latency in ms>` 
@@ -12,143 +16,25 @@ we used linux's traffic control `tc` to add 5ms network latency (10ms round trip
 - a moving client from Pankow region in Berlin to far west of Potsdam
 - the client calls the sieve function once per location, and after location update
 ### Servers
-- Cloud
-  - Location: `53.343660,-6.254740` (Dublin)
-  - Service Area:
-    - Whole world
-- TUBerlin:
-  - Location: `52.510057,13.325043`
-  - Service Area: 
-    - 20km diameter,
-    - GeoJSON: 
-    ```JSON 
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Polygon",
-        "coordinates": [
-          [
-            [
-              13.235211471588048,
-              52.354464419905504
-            ],
-            [
-              13.414874528411953,
-              52.354464419905504
-            ],
-            [
-              13.504706056823904,
-              52.510057
-            ],
-            [
-              13.414874528411953,
-              52.6656495800945
-            ],
-            [
-              13.235211471588048,
-              52.6656495800945
-            ],
-            [
-              13.145379943176097,
-              52.510057
-            ],
-            [
-              13.235211471588048,
-              52.354464419905504
-            ]
-          ]
-        ]
-      },
-      "properties": {
-        "ccid": {
-          "q": 0,
-          "r": 0,
-          "s": 0
-        },
-        "centroid": {
-          "longitude": 13.325043,
-          "latitude": 52.510057
-        },
-        "circumradius": 20000,
-        "inradius": 17320.508075688773
-      }
-    }
-    ```
+ <details>
+     <summary>multiple marks placeholder:</summary>  
+
+  ```json
+  {
+    "type": "FeatureCollection",
+    "features": [
   
-- Potsdam:
-  - Location: `52.354199, 13.055874`
-- Service Area: 
-  - 20km diameter,
-- GeoJSON:
-  ```JSON
-          {
-          "type": "Feature",
-          "geometry": {
-              "type": "Polygon",
-              "coordinates": [
-                  [
-                      [
-                          12.966042471588047,
-                          52.1986064199055
-                      ],
-                      [
-                          13.145705528411952,
-                          52.1986064199055
-                      ],
-                      [
-                          13.235537056823903,
-                          52.354199
-                      ],
-                      [
-                          13.145705528411952,
-                          52.5097915800945
-                      ],
-                      [
-                          12.966042471588047,
-                          52.5097915800945
-                      ],
-                      [
-                          12.876210943176096,
-                          52.354199
-                      ],
-                      [
-                          12.966042471588047,
-                          52.1986064199055
-                      ]
-                  ]
-              ]
-          },
-          "properties": {
-				"ccid": {
-					"q": 0,
-					"r": 0,
-					"s": 0
-				},
-				"centroid": {
-					"longitude": 13.055874,
-					"latitude": 52.354199
-				},
-				"circumradius": 20000.0,
-				"inradius": 17320.508075688773
-			}
-		}
-    ```
+      
+    ]
+  }
+  ```
+  </details>
 
+  <details>
+      <summary>Full GeoJson:</summary>
 
-- multiple marks placeholder: 
-```json
-{
-  "type": "FeatureCollection",
-  "features": [
-
-    
-  ]
-}
-```
-
-- Full GeoJson:
-```json
-{
+  ```json
+  {
   "type": "FeatureCollection",
   "features": [
     {
@@ -435,7 +321,163 @@ we used linux's traffic control `tc` to add 5ms network latency (10ms round trip
         ],
         "type": "Point"
       }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Havel2"
+      },
+      "geometry": {
+        "coordinates": [
+          12.740869,
+          52.462820
+        ],
+        "type": "Point"
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "ccid": "",
+        "name": "Havel3"
+      },
+      "geometry": {
+        "coordinates": [
+          12.691420,
+          52.448292
+        ],
+        "type": "Point"
+      }
     }
   ]
 }
-```
+  ```
+  </details>
+
+- Cloud
+  - Location: `53.343660,-6.254740` (Dublin)
+  - Service Area:
+    - Whole world
+- TUBerlin:
+  - Location: `52.510057,13.325043`
+  - Service Area: 
+    - 20km diameter,
+    <details>
+    <summary>GeoJSON:</summary> 
+    
+    ```JSON 
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              13.235211471588048,
+              52.354464419905504
+            ],
+            [
+              13.414874528411953,
+              52.354464419905504
+            ],
+            [
+              13.504706056823904,
+              52.510057
+            ],
+            [
+              13.414874528411953,
+              52.6656495800945
+            ],
+            [
+              13.235211471588048,
+              52.6656495800945
+            ],
+            [
+              13.145379943176097,
+              52.510057
+            ],
+            [
+              13.235211471588048,
+              52.354464419905504
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "ccid": {
+          "q": 0,
+          "r": 0,
+          "s": 0
+        },
+        "centroid": {
+          "longitude": 13.325043,
+          "latitude": 52.510057
+        },
+        "circumradius": 20000,
+        "inradius": 17320.508075688773
+      }
+    }
+    ```
+    </details>
+  
+- Potsdam:
+  - Location: `52.354199, 13.055874`
+- Service Area: 
+  - 20km diameter,
+    <details>
+      <summary>GeoJSON:</summary> 
+    
+    ```JSON
+            {
+            "type": "Feature",
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            12.966042471588047,
+                            52.1986064199055
+                        ],
+                        [
+                            13.145705528411952,
+                            52.1986064199055
+                        ],
+                        [
+                            13.235537056823903,
+                            52.354199
+                        ],
+                        [
+                            13.145705528411952,
+                            52.5097915800945
+                        ],
+                        [
+                            12.966042471588047,
+                            52.5097915800945
+                        ],
+                        [
+                            12.876210943176096,
+                            52.354199
+                        ],
+                        [
+                            12.966042471588047,
+                            52.1986064199055
+                        ]
+                    ]
+                ]
+            },
+            "properties": {
+                  "ccid": {
+                      "q": 0,
+                      "r": 0,
+                      "s": 0
+                  },
+                  "centroid": {
+                      "longitude": 13.055874,
+                      "latitude": 52.354199
+                  },
+                  "circumradius": 20000.0,
+                  "inradius": 17320.508075688773
+              }
+          }
+      ```
+  </details>

@@ -11,7 +11,9 @@ import kotlin.system.measureTimeMillis
 fun main() {
     val locations = Commons.locScenario1
     val client = Client(locations.first().second, Commons.debug,
-        Commons.brokerAddresses["Berlin"]!!, 5560, "C1Scenario1", 4000, 4000)
+        Commons.brokerAddresses["Berlin"]!!, 5560, "DistanceClient",
+        4000, 4000)
+    var cloudCounter = 0; var edgeCounter = 0
     Measurement.log(client.id, -1, "Started at", locations.first().first, null)
 
     val elapsed = measureTimeMillis {
@@ -25,8 +27,12 @@ fun main() {
             if(res.first != null){
                 val serverInfo = res.first!!.responseTopicFence
                 val serverLocation = if(serverInfo.senderId.contains("Cloud")){
+                    cloudCounter++
                     Location(53.343660,-6.254740) // Dublin
-                } else serverInfo.fence.toGeofence().center
+                } else {
+                    edgeCounter++
+                    serverInfo.fence.toGeofence().center
+                }
                 Measurement.log(client.id, res.second, "Done", loc.second.distanceKmTo(serverLocation).toString(), reqId)
             } // misc shows distance in km in Double format
             else client.throwSafeException("${client.id}-($i-${loc.first}): NOOOOOOOOOOOOOOO Response! (${res.second}ms)")
@@ -36,5 +42,6 @@ fun main() {
     client.shutdown()
     Measurement.log(client.id, elapsed, "Finished",
         "${locations.size} total locations", null)
+    Measurement.log(client.id, elapsed, "byCloud/Edge", "$cloudCounter;$edgeCounter", null)
     Measurement.close()
 }
