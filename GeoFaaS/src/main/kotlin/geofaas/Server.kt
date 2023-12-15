@@ -70,13 +70,15 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
                 }
             }
         }
-        shutdown()
+        shutdown(false)
     }
-    fun shutdown() {
-        val countdown = 3000L
+    fun shutdown(withCountdown: Boolean) {
+        val countdown = 2000L
         state = false
-        logger.info(".:Shutting down GeoFaaS in ${countdown}ms:.")
-        sleepNoLog(countdown, 0)
+        if (withCountdown) {
+            logger.info(".:Shutting down GeoFaaS in ${countdown}ms:.")
+            sleepNoLog(countdown, 0)
+        } else logger.info(".:Shutting down GeoFaaS:.")
         gbClient.terminate()
         faasRegistry.clear()
         listeningThread.interrupt()
@@ -229,7 +231,7 @@ suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-r
     Signal.handle(Signal("INT")){// handle terminate signal
 
         Measurement.log(args[0], -1, "Intrupt received","", null)
-        geofaas.shutdown()
+        geofaas.shutdown(true)
         exitProcess(0)
     }
 
