@@ -10,6 +10,7 @@ import kotlin.system.measureTimeMillis
 
 fun main() {
     val locations = Commons.locScenario1
+    Measurement.log("", -1, "SenarioDistance (locSize)", locations.size.toString(), null)
     val client = Client(locations.first().second, Commons.debug,
         Commons.brokerAddresses["Berlin"]!!, 5560, "DistanceClient",
         4000, 4000)
@@ -22,7 +23,7 @@ fun main() {
 
             if (i > 0)
                 client.moveTo(loc, reqId)
-            val res: Pair<FunctionMessage?, Long> = client.call("sieve",  "", reqId)
+            val res: Pair<FunctionMessage?, Long> = client.call("sieve",  "", reqId, 1, 2)
             // Note: call's run time also depends on number of the retries
             if(res.first != null){
                 val serverInfo = res.first!!.responseTopicFence

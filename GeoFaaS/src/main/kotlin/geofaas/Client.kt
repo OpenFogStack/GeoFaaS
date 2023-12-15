@@ -16,9 +16,9 @@ import geofaas.experiment.Commons.locFranceToPoland
 import geofaas.experiment.Commons.locFrankParisBerlin
 import geofaas.experiment.Measurement
 
-class Client(loc: Location, debug: Boolean, host: String, port: Int, id: String = "ClientGeoFaaS1", ackTimeout: Int = 8000, resTimeout: Int = 4000,
-             private val retries: Int = 1
-) {
+class Client(loc: Location, debug: Boolean, host: String, port: Int,
+             id: String = "ClientGeoFaaS1", ackTimeout: Int = 8000, resTimeout: Int = 4000
+    ) {
     private val logger = LogManager.getLogger()
     private val gbClient = ClientGBClient(loc, debug, host, port, id, ackTimeout, resTimeout)
     private val radius = 0.001
@@ -34,10 +34,10 @@ class Client(loc: Location, debug: Boolean, host: String, port: Int, id: String 
     }
 
     // returns a pair of result and run time
-    fun call(funcName: String, param: String, reqId: RequestID): Pair<FunctionMessage?, Long> {
+    fun call(funcName: String, param: String, reqId: RequestID, retries: Int = 0, ackAttempts: Int = 1): Pair<FunctionMessage?, Long> {
         val result: FunctionMessage?
         val elapsed = measureTimeMillis {
-            result = gbClient.callFunction(funcName, param, retries, radius, reqId)
+            result = gbClient.callFunction(funcName, param, retries, ackAttempts, radius, reqId)
         }
         if (result == null)
             logger.error("No result received after {} retries! {}ms", retries, elapsed)

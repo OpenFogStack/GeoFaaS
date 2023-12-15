@@ -12,13 +12,13 @@ object FaultToleranceScenarios {
      // synchronously starts and calls a given function for each thread in the array.
     fun runThreaded(numClients: Int, numRequests: Int,
                     locations: List<Pair<String, Location>>,
-                    ackT: Int, resT: Int, retries: Int) {
+                    ackT: Int, resT: Int, retries: Int, ackAttempts: Int) {
 
         val clientsPair = mutableListOf<Pair<Client, Pair<String, Location>>>()
         clientsPair.addAll( // all clients will start connecting to the broker
             locations.mapIndexed { i, p ->
                 Client(p.second, Commons.debug, Commons.brokerAddresses["Potsdam"]!!, 5560, "Client${i+1}",
-                    ackT, resT, retries) to p
+                    ackT, resT) to p
             }
         )
 
@@ -36,7 +36,7 @@ object FaultToleranceScenarios {
                 latch.await()
 
                 // launch the experiment
-                nonMovingCalls(clientsPair[i], numRequests)
+                nonMovingCalls(clientsPair[i], numRequests, retries, ackAttempts)
             }
         }
 
@@ -47,7 +47,7 @@ object FaultToleranceScenarios {
          Measurement.close()
     }
 
-    private fun nonMovingCalls(clientPair: Pair<Client, Pair<String, Location>>, numRequests: Int) {
+    private fun nonMovingCalls(clientPair: Pair<Client, Pair<String, Location>>, numRequests: Int, retries: Int, ackAttempts: Int) {
         val client = clientPair.first
         val locPair = clientPair.second
         var cloudCounter = 0; var edgeCounter = 0
@@ -56,7 +56,7 @@ object FaultToleranceScenarios {
             for (i in 1..numRequests) {
                 val reqId = RequestID(i, client.id, locPair.first)
 
-                val res: Pair<FunctionMessage?, Long> = client.call("sieve", "", reqId)
+                val res: Pair<FunctionMessage?, Long> = client.call("sieve", "", reqId, retries, ackAttempts)
                 // Note: call's run time also depends on number of the retries
                 if (res.first != null) {
                     val serverInfo = res.first!!.responseTopicFence
