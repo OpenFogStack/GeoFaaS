@@ -15,7 +15,7 @@ object FaultToleranceScenarios {
                     ackT: Int, resT: Int, retries: Int, ackAttempts: Int) {
 
         val clientsPair = mutableListOf<Pair<Client, Pair<String, Location>>>()
-        clientsPair.addAll( // all clients will start connecting to the broker
+        clientsPair.addAll( // all clients will start connecting to the broker here
             locations.mapIndexed { i, p ->
                 Client(p.second, Commons.debug, Commons.brokerAddresses["Potsdam"]!!, 5560, "Client${i+1}",
                     ackT, resT) to p

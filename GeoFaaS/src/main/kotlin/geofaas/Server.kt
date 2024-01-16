@@ -27,9 +27,9 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
     private val mode = if(id == "GeoFaaS-Cloud") ClientType.CLOUD else ClientType.EDGE
     private val gbClient = ServerGBClient(loc, debug, host, port, id, mode, brokerAreaManager)
     private var faasRegistry = mutableListOf<TinyFaasClient>()
-    private val listeningThread = Thread {  collectNewMessages() }
+    private val listeningThread = Thread { collectNewMessages() }
     private var state :Boolean = false
-    private var receivedCalls = AtomicInteger(); private var receivedNacks = AtomicInteger(); private var receivedRetries = AtomicInteger()
+    private var receivedCalls = AtomicInteger(); private var receivedNacks = AtomicInteger(); private var receivedRetries = AtomicInteger(); private var inProgressRequests = AtomicInteger()
 
     // returns success if success to Subscribe to all the functions
     suspend fun registerFaaS(tf: TinyFaasClient): StatusCode {
@@ -94,6 +94,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
 //        val listeningMsg = if (mode == ClientType.CLOUD) "CALL(/retry) or NACK" else "CALL"
 //        val newMsg :FunctionMessage? = gbClient.listenForFunction(listeningMsg, 0) // blocking
         return measureTimeMillis {
+            inProgressRequests.incrementAndGet()
             if (newMsg != null) {
                 val distanceToClient = gbClient.location.distanceKmTo(newMsg.responseTopicFence.fence.toGeofence().center)
                 var eventDesc = "newMsg;${newMsg.funcAction}"
@@ -115,6 +116,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
                         val selectedFaaS: TinyFaasClient = logRuntime(gbClient.id, "Select;FaaS", "between: ${registeredFunctions.joinToString(separator = ";")}", newMsg.reqId) {
                             bestAvailFaaS(newMsg.funcName, null)
                         }
+                        val beforeCallInProgress = inProgressRequests
                         val response: Pair<HttpResponse?, Boolean>
                         val faasTime = measureTimeMillis { response = selectedFaaS.call(newMsg.funcName, newMsg.data) }
                         Measurement.log(gbClient.id, faasTime, "FaaS;Response", "${newMsg.funcName}(${newMsg.data})", newMsg.reqId)
@@ -134,7 +136,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
     //                        val response2 = selectedFaaS.call(newMsg.funcName, newMsg.data)
     //                        logger.debug("FaaS's raw Response: {}", response2)
                             //TODO call another FaaS or offload if there is no more FaaS serving the func
-                            logger.error("No/Bad response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}'")
+                            logger.error("No/Bad response from '${selectedFaaS.host}:${selectedFaaS.port}' FaaS when calling '${newMsg.funcName}'. beforeCall:current #in-progress: $beforeCallInProgress:$inProgressRequests")
                             if(mode == ClientType.CLOUD)
                                 logger.error("The Client will NOT receive any response! This is end of the line of offloading")
                             else {
@@ -188,6 +190,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
                     logger.error("The new request is not a CALL, but a ${newMsg.funcAction}!")
                 }
             }
+            inProgressRequests.decrementAndGet()
         }
     }
     private fun collectNewMessages() { // blocking
