@@ -8,7 +8,7 @@ fun main(args: Array<String>) {
     Measurement.log("", -1, "SenarioHighload (numCl/numReq)", "$numClients;$numRequests", null)
     // run the experiment
     FaultToleranceScenarios.runThreaded(
-        numClients, numRequests,
+        numClients, numRequests, "sievehard",
         locations,
         4000, 18000, 0, 1
     )

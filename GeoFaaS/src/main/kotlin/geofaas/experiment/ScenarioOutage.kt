@@ -8,7 +8,7 @@ fun main(args: Array<String>) {
     Measurement.log("", -1, "SenarioOutage (numCl/numReq)", "$numClients;$numRequests", null)
     // run the experiment
     FaultToleranceScenarios.runThreaded(
-        numClients, numRequests,
+        numClients, numRequests, "sieve",
         locations,
         1000, 4000, 1, 1
     )

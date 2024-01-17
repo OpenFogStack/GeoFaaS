@@ -10,7 +10,7 @@ import kotlin.system.measureTimeMillis
 
 object FaultToleranceScenarios {
      // synchronously starts and calls a given function for each thread in the array.
-    fun runThreaded(numClients: Int, numRequests: Int,
+    fun runThreaded(numClients: Int, numRequests: Int, function: String,
                     locations: List<Pair<String, Location>>,
                     ackT: Int, resT: Int, retries: Int, ackAttempts: Int) {
 
@@ -36,7 +36,7 @@ object FaultToleranceScenarios {
                 latch.await()
 
                 // launch the experiment
-                nonMovingCalls(clientsPair[i], numRequests, retries, ackAttempts)
+                nonMovingCalls(clientsPair[i], numRequests, function, retries, ackAttempts)
             }
         }
 
@@ -47,7 +47,7 @@ object FaultToleranceScenarios {
          Measurement.close()
     }
 
-    private fun nonMovingCalls(clientPair: Pair<Client, Pair<String, Location>>, numRequests: Int, retries: Int, ackAttempts: Int) {
+    private fun nonMovingCalls(clientPair: Pair<Client, Pair<String, Location>>, numRequests: Int, function: String, retries: Int, ackAttempts: Int) {
         val client = clientPair.first
         val locPair = clientPair.second
         var cloudCounter = 0; var edgeCounter = 0
@@ -56,7 +56,7 @@ object FaultToleranceScenarios {
             for (i in 1..numRequests) {
                 val reqId = RequestID(i, client.id, locPair.first)
 
-                val res: Pair<FunctionMessage?, Long> = client.call("sieve", "", reqId, retries, ackAttempts)
+                val res: Pair<FunctionMessage?, Long> = client.call(function, "", reqId, retries, ackAttempts)
                 // Note: call's run time also depends on number of the retries
                 if (res.first != null) {
                     val serverInfo = res.first!!.responseTopicFence
