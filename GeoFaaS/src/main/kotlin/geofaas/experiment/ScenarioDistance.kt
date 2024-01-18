@@ -29,7 +29,7 @@ fun main() {
                 val serverInfo = res.first!!.responseTopicFence
                 val serverLocation = if(serverInfo.senderId.contains("Cloud")){
                     cloudCounter++
-                    Location(53.343660,-6.254740) // Dublin
+                    Location(51.498593,-0.176959) // Imperial College London
                 } else {
                     edgeCounter++
                     serverInfo.fence.toGeofence().center

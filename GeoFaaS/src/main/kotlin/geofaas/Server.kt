@@ -223,7 +223,7 @@ suspend fun main(args: Array<String>) { // supply the broker id (same as disgb-r
     }
     val brokerInfo = disgbRegistry.ownBrokerInfo
     val brokerArea: Geofence = disgbRegistry.ownBrokerArea.coveredArea
-    val location = if(args[0] == "Cloud") Location(53.343660,-6.254740) else brokerArea.center
+    val location = if(args[0] == "Cloud") Location(51.498593,-0.176959) else brokerArea.center
     println(location)
     Measurement.log(args[0], -1, "BrokerArea", brokerArea.toString().replace(',', ';'), null)
     val geofaas = Server(location, args[3].toBoolean(), brokerInfo.ip, brokerInfo.port, "GeoFaaS-${brokerInfo.brokerId}", brokerAreaManager =  disgbRegistry)
