@@ -12,7 +12,7 @@ fun main() {
     val locations = Commons.locScenario1
     Measurement.log("", -1, "SenarioDistance (locSize)", locations.size.toString(), null)
     val client = Client(locations.first().second, Commons.debug,
-        Commons.brokerAddresses["Berlin"]!!, 5560, "DistanceClient",
+        Commons.brokerAddresses["Berlin"]!!, 60001, "DistanceClient",
         4000, 4000)
     var cloudCounter = 0; var edgeCounter = 0
     Measurement.log(client.id, -1, "Started at", locations.first().first, null)

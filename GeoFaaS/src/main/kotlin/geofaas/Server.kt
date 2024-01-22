@@ -116,7 +116,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
                         val selectedFaaS: TinyFaasClient = logRuntime(gbClient.id, "Select;FaaS", "between: ${registeredFunctions.joinToString(separator = ";")}", newMsg.reqId) {
                             bestAvailFaaS(newMsg.funcName, null)
                         }
-                        val beforeCallInProgress = inProgressRequests
+                        val beforeCallInProgress = inProgressRequests.get()
                         val response: Pair<HttpResponse?, Boolean>
                         val faasTime = measureTimeMillis { response = selectedFaaS.call(newMsg.funcName, newMsg.data) }
                         Measurement.log(gbClient.id, faasTime, "FaaS;Response", "${newMsg.funcName}(${newMsg.data})", newMsg.reqId)
@@ -136,12 +136,12 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
     //                        val response2 = selectedFaaS.call(newMsg.funcName, newMsg.data)
     //                        logger.debug("FaaS's raw Response: {}", response2)
                             //TODO call another FaaS or offload if there is no more FaaS serving the func
-                            logger.error("No/Bad response from '${selectedFaaS.host}:${selectedFaaS.port}' FaaS when calling '${newMsg.funcName}'. beforeCall:current #in-progress: $beforeCallInProgress:$inProgressRequests")
+                            logger.error("No/Bad response from '${selectedFaaS.host}:${selectedFaaS.port}' FaaS when calling '${newMsg.funcName}'. beforeCall:current #in-progress: $beforeCallInProgress:${inProgressRequests.get()}")
                             if(mode == ClientType.CLOUD)
                                 logger.error("The Client will NOT receive any response! This is end of the line of offloading")
                             else {
                                 logger.warn("Offloading to cloud...")
-                                logRuntime(newMsg.responseTopicFence.senderId, "NACK;sent", "No response from the FaaS '${selectedFaaS.host}:${selectedFaaS.port}'. Offloading to cloud...", newMsg.reqId){
+                                logRuntime(newMsg.responseTopicFence.senderId, "NACK;sent", "No response from the FaaS '${selectedFaaS.host}:${selectedFaaS.port}'. Offloaded to the cloud!", newMsg.reqId){
                                     gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence, newMsg.reqId, "GeoFaaS-Cloud")
                                 }
                             }

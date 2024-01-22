@@ -72,7 +72,7 @@ class TinyFaasClient (val host: String, val port: Int, private var functionsLoca
             if (httpCode == 404)
                 logger.error("function is not being served by tinyFaaS '$host:$port'")
             else
-                logger.error("bad response code from tinyFaaS '$host:$port'! '$httpCode'")
+                logger.error("bad response code '$httpCode' from tinyFaaS '$host:$port'!")
             return false
         }
         return true

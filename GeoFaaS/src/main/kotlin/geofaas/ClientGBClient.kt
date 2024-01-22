@@ -107,17 +107,14 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
             return Pair(StatusCode.Failure, null)
         val msg = if(isRetry) retryMessage else message //
         val pubStatus = Measurement.logRuntime(id, "Published" + if(isRetry) ";Retry" else "", "CALL", reqId){
-            repeat(1){// FIXME: TO DEBUG
-                basicClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call"), pubFence, msg))
-
-            }
+            basicClient.send(Payload.PUBLISHPayload(Topic("functions/$funcName/call"), pubFence, msg))
             listenForPubAckAndProcess(FunctionAction.CALL, funcName, ackTimeout)
         }
         when (pubStatus.first){
             StatusCode.WrongBroker -> return pubStatus
             StatusCode.Success -> {
                 // Wait for GeoFaaS's confirmation (Ack)
-                var ackAttmptCountDown = ackAttempts
+                var ackAttmptCountDown: Int = ackAttempts
                 var ackSender :String? = null
                 Measurement.logRuntime(id, "ACK;received", "timeout=$ackTimeout", reqId){
                     do {
