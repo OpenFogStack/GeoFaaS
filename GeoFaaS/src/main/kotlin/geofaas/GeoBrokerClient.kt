@@ -280,12 +280,29 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                         return if (message.funcAction == FunctionAction.NACK || message.funcAction == FunctionAction.CALL)
                             message
                         else {
-                            logger.error("{} expected, but received a {}. Pushing it to the pubQueue again.pubQueue size: {}", type, message.funcAction, pubQueue.size)
+                            logger.error("{} expected, but received a {}.  Pushing it to the pubQueue again.pubQueue size: {}", type, message.funcAction, pubQueue.size)
                             pubQueue.add(msgPayload)
                             null
                         }
                     }
-                    else -> {
+                    ClientType.CLIENT -> { // FIXME: client monkey patch to avoid stuck with a sequentially-wrong message. should drop/differentiate the result/ack of a certain call and its "retry"
+                        return if (message.funcAction == expectedAction)
+                            message
+                        else {
+                            logger.error("{} expected, but received a {}. Pushing it to the pubQueue again.pubQueue size: {}", type, message.funcAction, pubQueue.size)
+                            val undeliveredMessage: Payload? = basicClient.receiveWithTimeout(5)
+                            if(undeliveredMessage is Payload.PUBLISHPayload){
+                                pubQueue.add(undeliveredMessage)
+                                logger.debug("added a new PUB message before pushing {} message. dump: {}", message.funcAction, undeliveredMessage)
+                            } else if(undeliveredMessage != null) {
+                                ackQueue.add(undeliveredMessage)
+                                logger.debug("added a new message to ackQueue. dump: {}", undeliveredMessage)
+                            }
+                            pubQueue.add(msgPayload)
+                            null
+                        }
+                    }
+                    else -> { // Edge
                         return if (message.funcAction == expectedAction)
                             message
                         else {
@@ -492,6 +509,14 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         } else {
             logger.error("Unexpected! $logMsg", pubAck)
             if(pubAck != null) {
+                if (mode == ClientType.CLIENT) {  // FIXME: client monkey patch to avoid stuck with a sequentially-wrong message
+                    val undeliveredMessage: Payload? = basicClient.receiveWithTimeout(5)
+                    if(undeliveredMessage is Payload.PUBLISHPayload){
+                        pubQueue.add(undeliveredMessage)
+                    } else if(undeliveredMessage != null) {
+                        ackQueue.add(undeliveredMessage)
+                    }
+                }
                 logger.warn("Not a PUBACKPayload! adding it to the 'ackQueue'. dump: {}", pubAck)
                 ackQueue.add(pubAck)
                 return Pair(StatusCode.Retry, null)
