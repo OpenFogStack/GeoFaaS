@@ -17,7 +17,7 @@ object FaultToleranceScenarios {
         val clientsPair = mutableListOf<Pair<Client, Pair<String, Location>>>()
         clientsPair.addAll( // all clients will start connecting to the broker here
             locations.mapIndexed { i, p ->
-                Client(p.second, Commons.debug, Commons.brokerAddresses["Potsdam"]!!, 5560, "Client${i+1}",
+                Client(p.second, Commons.debug, Commons.brokerAddresses["Potsdam"]!!, 60001, "Client${i+1}",
                     ackT, resT) to p
             }
         )
@@ -56,7 +56,7 @@ object FaultToleranceScenarios {
             for (i in 1..numRequests) {
                 val reqId = RequestID(i, client.id, locPair.first)
 
-                val res: Pair<FunctionMessage?, Long> = client.call(function, "", reqId, retries, ackAttempts)
+                val res: Pair<FunctionMessage?, Long> = client.call(function, "", reqId, retries, ackAttempts, false)
                 // Note: call's run time also depends on number of the retries
                 if (res.first != null) {
                     val serverInfo = res.first!!.responseTopicFence

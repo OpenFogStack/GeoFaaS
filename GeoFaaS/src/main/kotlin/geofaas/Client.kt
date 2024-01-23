@@ -34,10 +34,10 @@ class Client(loc: Location, debug: Boolean, host: String, port: Int,
     }
 
     // returns a pair of result and run time
-    fun call(funcName: String, param: String, reqId: RequestID, retries: Int = 0, ackAttempts: Int = 1): Pair<FunctionMessage?, Long> {
+    fun call(funcName: String, param: String, reqId: RequestID, retries: Int = 0, ackAttempts: Int = 1, isWithCloudRetry: Boolean = true): Pair<FunctionMessage?, Long> {
         val result: FunctionMessage?
         val elapsed = measureTimeMillis {
-            result = gbClient.callFunction(funcName, param, retries, ackAttempts, radius, reqId)
+            result = gbClient.callFunction(funcName, param, retries, ackAttempts, radius, reqId, isWithCloudRetry)
         }
         if (result == null)
             logger.error("No result received after {} retries! {}ms", retries, elapsed)

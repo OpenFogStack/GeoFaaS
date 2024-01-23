@@ -16,12 +16,13 @@ import geofaas.Model.StatusCode
 import geofaas.Model.RequestID
 import geofaas.experiment.Measurement
 import org.apache.logging.log4j.LogManager
+import kotlin.math.log
 
 class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "ClientGeoFaaS1", private val ackTimeout: Int = 8000, private val resTimeout: Int = 3000): GeoBrokerClient(loc, ClientType.CLIENT, debug, host, port, id) {
     private val logger = LogManager.getLogger()
 //    private val getAckAttempts = 2
 
-    fun callFunction(funcName: String, data: String, retries: Int = 0, ackAttempts: Int = 0, radiusDegree: Double = 0.1, reqId: RequestID): FunctionMessage? {
+    fun callFunction(funcName: String, data: String, retries: Int = 0, ackAttempts: Int = 0, radiusDegree: Double = 0.1, reqId: RequestID, isWithCloudRetry: Boolean = true): FunctionMessage? {
         logger.info("calling '$funcName($data)'")
         val pubFence = Geofence.circle(location, radiusDegree)
         val subFence = Geofence.circle(location, radiusDegree) // subFence is better to be as narrow as possible (if the client is not moving, zero)
@@ -81,13 +82,17 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
 
         // Cloud direct call
         if(result == null) {// anything but success
-            logger.warn("No Result. Calling the cloud directly via 'functions/$funcName/call/retry'")
-            when(val pubCloudStatus = retryCallByCloud(messageRetryPayload, funcName, pubFence, ackAttempts, reqId)) {
-                StatusCode.Success -> result = listenForResult(resTimeout, reqId)
-                StatusCode.Failure -> {
-                    logger.error("Can't call Cloud GeoFaaS for $funcName($data)")
+            if(isWithCloudRetry){
+                logger.warn("No Result. Calling the cloud directly via 'functions/$funcName/call/retry'")
+                when(val pubCloudStatus = retryCallByCloud(messageRetryPayload, funcName, pubFence, ackAttempts, reqId)) {
+                    StatusCode.Success -> result = listenForResult(resTimeout, reqId)
+                    StatusCode.Failure -> {
+                        logger.error("Can't call Cloud GeoFaaS for $funcName($data)")
+                    }
+                    else -> throwSafeException("Unexpected publish status from Cloud '${pubCloudStatus}'")
                 }
-                else -> throwSafeException("Unexpected publish status from Cloud '${pubCloudStatus}'")
+            } else {
+                logger.warn("No Result. NO cloud direct retry")
             }
         }
 
@@ -98,6 +103,8 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
         else
             logger.error("problem with cleaning subscriptions after calling '$funcName'")
 
+        logger.debug("clearing pubQueue ({} messages) and ackQueue ({} messages)", pubQueue.size, ackQueue.size)
+        pubQueue.clear(); ackQueue.clear()
         return result
     }
 
@@ -130,6 +137,8 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
                 } else { // retry
                     logger.warn("Retry Call. No Ack from GeoFaaS after calling '$funcName'. $retries retries remained...")
                     Measurement.log(id, -1, "ACK;NoACK", "Retry;Pub;$retries retries remained", reqId)
+                    val pubQSize = pubQueue.size; pubQueue.clear()
+                    if (pubQSize > 0) logger.warn("cleared pubQueue with {} pubs", pubQSize)
                     return pubCallAndGetAck(message, funcName, pubFence, retries - 1, ackAttempts, retryMessage, reqId, true)
                 }
             }
@@ -206,7 +215,7 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
             do {
                 res = listenForFunction("RESULT", timeout)
                 resultCounter++
-            } while (res != null && res!!.reqId != reqId)//res!!.receiverId != id)
+            } while (res != null && res!!.reqId != reqId)
         }
         logger.info("{} Message(s) processed when listening for the result", resultCounter)
 
