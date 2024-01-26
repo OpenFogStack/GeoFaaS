@@ -241,6 +241,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
     fun listenForFunction(type: String, timeout: Int): FunctionMessage? {
         // wiki: function call/ack/nack/result
         val msgPayload: Payload?
+        var remainingTime: Int = 0
         val expectedAction = if (mode == ClientType.CLOUD) null else FunctionAction.valueOf(type) // cloud has two expected action
         when(mode) { // GeoFaaS server uses a thread for listening
             ClientType.CLIENT -> {
@@ -249,7 +250,13 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                     logger.info("Listening for a GeoFaaS '$type'...")
                     msgPayload = when (timeout){
                         0 -> basicClient.receive() // blocking
-                        else -> basicClient.receiveWithTimeout(timeout) // returns null after expiry
+                        else -> {
+                            val startTime = System.currentTimeMillis()
+                            val receivedMessage = basicClient.receiveWithTimeout(timeout) // returns null after expiry
+                            val endTime = System.currentTimeMillis()
+                            remainingTime = (timeout - (endTime - startTime)).toInt()
+                            receivedMessage
+                        }
                     }
                     if (timeout > 0 && msgPayload == null) {
                         logger.error("Listening timeout (${timeout}ms)! pubQueue size:{}", pubQueue.size)
@@ -280,33 +287,57 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                         return if (message.funcAction == FunctionAction.NACK || message.funcAction == FunctionAction.CALL)
                             message
                         else {
-                            logger.error("{} expected, but received a {}.  Pushing it to the pubQueue again.pubQueue size: {}", type, message.funcAction, pubQueue.size)
+                            logger.error("{} expected, but received a {}.  Pushing it to the pubQueue again. pubQueue size: {}", type, message.funcAction, pubQueue.size)
                             pubQueue.add(msgPayload)
                             null
                         }
                     }
                     ClientType.CLIENT -> { // FIXME: client monkey patch to avoid stuck with a sequentially-wrong message. should drop/differentiate the result/ack of a certain call and its "retry"
-                        return if (message.funcAction == expectedAction)
-                            message
+                        if (message.funcAction == expectedAction)
+                            return message
                         else {
-                            logger.error("{} expected, but received a {}. Pushing it to the pubQueue again.pubQueue size: {}", type, message.funcAction, pubQueue.size)
-                            val undeliveredMessage: Payload? = basicClient.receiveWithTimeout(5)
-                            if(undeliveredMessage is Payload.PUBLISHPayload){
-                                pubQueue.add(undeliveredMessage)
-                                logger.debug("added a new PUB message before pushing {} message. dump: {}", message.funcAction, undeliveredMessage)
-                            } else if(undeliveredMessage != null) {
-                                ackQueue.add(undeliveredMessage)
-                                logger.debug("added a new message to ackQueue. dump: {}", undeliveredMessage)
-                            }
-                            pubQueue.add(msgPayload)
-                            null
+                            if(message.receiverId == id)
+                                logger.error("{} expected, but received a {}. Pushing it to the pubQueue again. pubQueue size: {}", type, message.funcAction, pubQueue.size)
+                            var undeliveredPayload: Payload?
+                            var undeliveredMessage: FunctionMessage? = null
+                            do {
+                                val newListenTime = if(remainingTime <= 0) 30 else remainingTime
+                                logger.info("Listening for an undelivered $type for ${newListenTime}ms")
+                                val startTime = System.currentTimeMillis()
+                                undeliveredPayload = basicClient.receiveWithTimeout(newListenTime)
+                                val endTime = System.currentTimeMillis()
+                                remainingTime = (remainingTime - (endTime - startTime)).toInt()
+
+                                if(undeliveredPayload is Payload.PUBLISHPayload){
+                                    undeliveredMessage = gson.fromJson(undeliveredPayload.content, FunctionMessage::class.java)
+                                    if (undeliveredMessage.receiverId == id) {
+                                        if(undeliveredMessage.funcAction == expectedAction){
+                                            logger.debug("new undeliverd message: {}", undeliveredMessage)
+                                            if(message.receiverId == id) {
+                                                logger.debug("putting the previous Pub message to the pubQueue")
+                                                pubQueue.add(msgPayload) // put the wrong message back
+                                            }
+                                            return undeliveredMessage
+                                        }
+                                        pubQueue.add(undeliveredPayload)
+                                        logger.debug("added a new PUB message before pushing {} message. dump: {}", message.funcAction, undeliveredPayload)
+                                    }
+                                } else if(undeliveredPayload != null) {
+                                    ackQueue.add(undeliveredPayload)
+                                    logger.debug("added a new message to ackQueue. dump: {}", undeliveredPayload)
+                                } else
+                                    logger.error("no new undelivered gb messages after {}ms. remaining timeout is: {}ms", newListenTime, remainingTime)
+                            } while (undeliveredPayload != null && undeliveredMessage != null && undeliveredMessage.receiverId != id)
+                            if(message.receiverId == id)
+                                pubQueue.add(msgPayload)
+                            return null
                         }
                     }
                     else -> { // Edge
                         return if (message.funcAction == expectedAction)
                             message
                         else {
-                            logger.error("{} expected, but received a {}. Pushing it to the pubQueue again.pubQueue size: {}", type, message.funcAction, pubQueue.size)
+                            logger.error("{} expected, but received a {}. Pushing it to the pubQueue again. pubQueue size: {}", type, message.funcAction, pubQueue.size)
                             pubQueue.add(msgPayload)
                             null
                         }
@@ -321,8 +352,8 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             return null
         } else {
             ackQueue.add(msgPayload)
-            logger.warn("Not a PUBLISHPayload! adding it to the 'ackQueue'. dump: {}", msgPayload)
-            return null
+            logger.warn("Not a PUBLISHPayload! adding it to the 'ackQueue' and recalling ListenForFunction($type,$remainingTime). dump: {}", msgPayload)
+            return listenForFunction(type, remainingTime)
         }
     }
     fun listenForPubAckAndProcess(funcAct: FunctionAction, funcName: String, timeout: Int): Pair<StatusCode, BrokerInfo?> {
