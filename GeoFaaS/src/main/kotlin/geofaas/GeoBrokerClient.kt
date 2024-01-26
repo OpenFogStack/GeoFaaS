@@ -362,24 +362,28 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             ClientType.CLIENT -> ackQueue.poll() // non-blocking
             else -> ackQueue.take() // blocking (for GeoFaaS server)
         }
+        var remainingTime = timeout
         if (enqueuedAck == null) { // only for the client
             if (timeout > 0)
-                logger.debug("PubAck queue is empty. Listening for a PubAck for ${timeout}ms...")
+                logger.debug("(Pub) ackQueue is empty. Listening for a PubAck for ${timeout}ms...")
             else
-                logger.debug("PubAck queue is empty. Listening for a PubAck...")
+                logger.debug("(Pub) ackQueue is empty. Listening for a PubAck...")
+            val startTime = System.currentTimeMillis()
             val pubAck = basicClient.receiveWithTimeout(timeout)
-            var pubStatus = processPublishAckSuccess(pubAck, funcName, funcAct, timeout > 0) // will push to the pubQueue
+            val endTime = System.currentTimeMillis()
+            remainingTime = (remainingTime - (endTime - startTime)).toInt()
+            var pubStatus = processPublishAckSuccess(pubAck, funcName, funcAct, timeout > 0, remainingTime) // will push into the pubQueue
             while (pubStatus.first == StatusCode.Retry){
-                logger.debug("Retrying listening for a PubAck")
-                pubStatus = listenForPubAckAndProcess(funcAct, funcName, timeout)
+                logger.debug("Retry listening for a PubAck")
+                pubStatus = listenForPubAckAndProcess(funcAct, funcName, remainingTime)
             }
             return pubStatus
         } else {
-            logger.debug("PubAck queue's size is ${ackQueue.size}. dequeued: {}", enqueuedAck)
-            var pubStatus = processPublishAckSuccess(enqueuedAck, funcName, funcAct, timeout > 0) // will push to the pubQueue
+            logger.debug("(Pub) ackQueue's size is ${ackQueue.size}. dequeued: {}", enqueuedAck)
+            var pubStatus = processPublishAckSuccess(enqueuedAck, funcName, funcAct, timeout > 0, remainingTime) // will push to the pubQueue
             while (pubStatus.first == StatusCode.Retry){
-                logger.debug("Retrying listening for a PubAck")
-                pubStatus = listenForPubAckAndProcess(funcAct, funcName, timeout)
+                logger.debug("Retry listening for a PubAck")
+                pubStatus = listenForPubAckAndProcess(funcAct, funcName, remainingTime)
             }
             return pubStatus
         }
@@ -520,7 +524,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         }
     }
     // Returns Success, Failure, WrongBroker, and Retry
-    protected fun processPublishAckSuccess(pubAck: Payload?, funcName: String, funcAct: FunctionAction, withTimeout: Boolean): Pair<StatusCode, BrokerInfo?> {
+    protected fun processPublishAckSuccess(pubAck: Payload?, funcName: String, funcAct: FunctionAction, withTimeout: Boolean, remainingTimeout: Int): Pair<StatusCode, BrokerInfo?> {
         val logMsg = "'$funcName' $funcAct Pub confirmation: {}"
         if (pubAck is Payload.PUBACKPayload) {
             val noError = logPublishAck(pubAck, logMsg) // logs the reasonCode
@@ -540,12 +544,22 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         } else {
             logger.error("Unexpected! $logMsg", pubAck)
             if(pubAck != null) {
-                if (mode == ClientType.CLIENT) {  // FIXME: client monkey patch to avoid stuck with a sequentially-wrong message
-                    val undeliveredMessage: Payload? = basicClient.receiveWithTimeout(5)
-                    if(undeliveredMessage is Payload.PUBLISHPayload){
-                        pubQueue.add(undeliveredMessage)
-                    } else if(undeliveredMessage != null) {
-                        ackQueue.add(undeliveredMessage)
+                if (mode == ClientType.CLIENT) {  // FIXME: client monkey patch to avoid stuck with a sequentially-wrong message. still consumes the "ack attempts" if wrong sequence happens
+                    val undeliveredMessage: FunctionMessage?
+                    val remainingTimeout2 = if (remainingTimeout <= 0) 30 else remainingTimeout
+                    logger.info("Listening for an undelivered pubAck for {}ms", remainingTimeout2)
+                    val undeliveredPayload: Payload? = basicClient.receiveWithTimeout(remainingTimeout2) // TODO: need to calculate new remainingTimeout
+                    if(undeliveredPayload is Payload.PUBLISHPayload){
+                        undeliveredMessage = gson.fromJson(undeliveredPayload.content, FunctionMessage::class.java)
+                        if(undeliveredMessage.receiverId == id) {
+                            pubQueue.add(undeliveredPayload)
+                            logger.debug("added a new message to pubQueue. dump: {}", undeliveredPayload)
+                        }
+                    } else if(undeliveredPayload != null) {
+                        ackQueue.add(undeliveredPayload)
+                        logger.debug("added a new message before pushing {} to ackQueue. dump: {}", pubAck, undeliveredPayload)
+                    } else {
+                        logger.debug("no new undelivered gb message after 30ms")
                     }
                 }
                 logger.warn("Not a PUBACKPayload! adding it to the 'ackQueue'. dump: {}", pubAck)
