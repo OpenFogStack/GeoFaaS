@@ -135,10 +135,13 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
                 if (ackSender != null){
                     return Pair(StatusCode.Success, null)
                 } else { // retry
-                    logger.warn("Retry Call. No Ack from GeoFaaS after calling '$funcName'. $retries retries remained...")
+                    if (retries > 0)
+                        logger.warn("Retry Call. No Ack from GeoFaaS after calling '$funcName'. $retries retries remained...")
+                    else
+                        logger.error("No Ack from GeoFaaS after calling '$funcName'. NO retries remained...")
                     Measurement.log(id, -1, "ACK;NoACK", "Retry;Pub;$retries retries remained", reqId)
-                    val pubQSize = pubQueue.size; pubQueue.clear()
-                    if (pubQSize > 0) logger.warn("cleared pubQueue with {} pubs", pubQSize)
+//                    val pubQSize = pubQueue.size; pubQueue.clear()
+//                    if (pubQSize > 0) logger.warn("cleared pubQueue with {} pubs", pubQSize)
                     return pubCallAndGetAck(message, funcName, pubFence, retries - 1, ackAttempts, retryMessage, reqId, true)
                 }
             }
