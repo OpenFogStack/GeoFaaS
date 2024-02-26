@@ -1,21 +1,21 @@
-# Scenario One: Distance/Latency 
+# Scenario One: Distance/Latency Change
 
 Shows that the geo-distribution is transparent to moving clients by showing the latency footprint of handovers and client's distance to cloud/edge.
 
+![Alt text](client-and-serviceares.png)
 ## Setup
-- 2 edge brokers, with a 5ms latency in between (each trip)
-- cloud broker in Dublin (30ms ping, ec2 4vCpu, 8gb RAM). set the location to Trinity college of Dublin
-- no artificial latency between client and Edges
-- the client moves from pankow to west of potsdam. hand overs visible by dots
+
 ### traffic control
-we used linux's traffic control `tc` to add 5ms network latency (10ms round trip) for inter-Edge Server connection  
+we used linux's traffic control `tc` to add 5ms network latency (10ms round trip) for inter-Edge connection  
 - run the `latency_setup.sh <net-interface> <other-broker-ip> <additional latency in ms>` 
 - allow non-root user to run tc commands: `setcap cap_net_admin+ep /usr/sbin/tc`
 
 ### Client
 - a moving client from Pankow region in Berlin to far west of Potsdam
-- the client calls the sieve function once per location, and after location update
+- the client calls the sieve function once per location
 ### Servers
+- We set a 5ms inter-edge artificial network latency (each trip)
+- you can copy measurement files to local using scp: `scp "raspi-gamma:~/Documents/logs/*.csv" .`
  <details>
      <summary>multiple marks placeholder:</summary>  
 
@@ -86,7 +86,7 @@ we used linux's traffic control `tc` to add 5ms network latency (10ms round trip
         },
         "circumradius": 20000,
         "inradius": 17320.508075688773,
-        "name": "TUB Broker"
+        "name": "TUB Node"
       },
       "id": 0
     },
@@ -135,7 +135,7 @@ we used linux's traffic control `tc` to add 5ms network latency (10ms round trip
         },
         "circumradius": 20000,
         "inradius": 17320.508075688773,
-        "name": "Potsdam broker"
+        "name": "Potsdam Node"
       }
     },
     {
@@ -355,10 +355,13 @@ we used linux's traffic control `tc` to add 5ms network latency (10ms round trip
   </details>
 
 - Cloud
-  - Location: `53.343660,-6.254740` (Dublin)
+  - Location: `51.498593,-0.176959` (London)
+    - cloud node in London (24ms ping). set the location to Imperial College London
   - Service Area:
     - Whole world
-- TUBerlin:
+  - 10 threads for sieve function
+- TUBerlin
+  - 2 threads for sieve function
   - Location: `52.510057,13.325043`
   - Service Area: 
     - 20km diameter,
@@ -420,7 +423,8 @@ we used linux's traffic control `tc` to add 5ms network latency (10ms round trip
     ```
     </details>
   
-- Potsdam:
+- Potsdam
+  - 2 threads for sieve function
   - Location: `52.354199, 13.055874`
 - Service Area: 
   - 20km diameter,
@@ -481,3 +485,5 @@ we used linux's traffic control `tc` to add 5ms network latency (10ms round trip
           }
       ```
   </details>
+
+##

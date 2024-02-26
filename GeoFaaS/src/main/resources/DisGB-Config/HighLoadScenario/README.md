@@ -1,20 +1,27 @@
-# Scenario Two: Highload causes offloading to the cloud
+# Scenario Two: High Load, causes offloading to the cloud
+
+This experiment shows the system still works even if a GeoFaaS Bridge fails, while the client does/knows nothing extra.  
+The edge GeoFaaS Bridge shutdowns after processing half of the requests and further client requests are routed to the cloud
 
 ## Setup
-- changed sieve function difficulty to return prime numbers under 10m (instead of 10k)
+
+
+### Clients
 - high result timeouts to avoid clients to retry if the edge is already processing it
-
-
-### clients
-- 16 non-moving clients, each call 10 times
-- `ScenarioHighload.kt`
-- the client program gets the number of requests per client from the input
-- result timeout set to 18s and ack to 4s
+- Every 5 sec, 1,2,4,8, and 16 non-moving clients call, for a total 10 times
+- the client program gets the number of requests per client from the input: `$ ScenarioHighload.kt <numClients> <numRequests>`
+- result timeout set to 25s and ack to 4s
 
 ### Servers
+- we deploy the "sievehard" function
+- set both to process all requests (`numClients * numRequests`), i.e. 10, 20, 40, 80, and 160
+
+
+
 - Cloud
-  - Same as Distance scenario
+  - configs are same as Distance scenario
+  - 10 threads for sievehard function
 
 - Potsdam:
-  - Same as Distance scenario
-  - set to process 160 requests (all requests)
+  - configs are same as Distance scenario
+  - 2 threads for sievehard function
