@@ -1,6 +1,6 @@
 # GeoFaaS
 
-Yet another edge-to-cloud FaaS platform. A distributed solution that routes client requests using their location to the closest FaaS server.  
+Yet another edge-to-cloud FaaS platform. A decenteralized solution that routes client requests using their location to the closest FaaS server.  
 Under the hood it leverages the Distributed [Geobroker](https://github.com/MoeweX/geobroker) (DisGB) and lightweight FaaS systems (e.g. [tinyFaaS](https://github.com/OpenFogStack/tinyFaaS)). 
 
 
