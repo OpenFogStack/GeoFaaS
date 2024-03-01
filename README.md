@@ -7,14 +7,15 @@ Under the hood it leverages the Distributed [Geobroker](https://github.com/Moewe
 ## Remote server setup
 An editor instead of `vi`? Helix or NeoVim! , and `tmux` for remote administrations. Plus `bat`, a better `cat`!
 ```
-sudo apt update && sudo apt install -y neovim libavutil-dev tmux bat git-core make zip htop # the last 3 are dependencies
+sudo apt update && sudo apt install -y neovim tmux bat htop
 ```
-### `java`
+java and other dependencies 
 ```
-sudo apt install default-jdk
+sudo apt install -y default-jdk libavutil-dev git-core make zip
 ```
 
 ### Golang 1.20.6
+That's the version we used and tested
 ```
 mkdir ~/src && cd ~/src
 wget https://go.dev/dl/go1.20.6.linux-arm64.tar.gz #for raspberries
@@ -34,7 +35,7 @@ add these two below lines and save, then `source ~.profile` from terminal:
 - [For Debian](https://docs.docker.com/engine/install/debian/). you can install both the latest or a specific version of docker
 - I needed to add the current user to the docker group and logout/login. `sudo groupadd docker` and `sudo usermod -aG docker ${USER}`. For more, check the [post-install steps](https://docs.docker.com/engine/install/linux-postinstall/)
 
-### Setup codes (To be updated)
+### Deployment setup  (To be updated)
 ```
 cd Documents/ # optional path
 git clone https://github.com/OpenFogStack/tinyFaaS.git # get tinyfaas
@@ -87,9 +88,9 @@ messageProcessors = 2
     - `./scripts/upload.sh "test/fns/sieve-of-eratosthenes" "sieve" "nodejs" 1`
     - `./scripts/upload.sh "test/fns/echo-js" "echo" "nodejs" 1`
 - Run Corresponding GeoFaaS Edge (non-optional)
-  - `java -jar GeoFaaSServer.jar Berlin 1 production false` params: the broker id, number of listening requests before exit, running mode, and debug mode
+  - `java -jar GeoFaaSServer.jar Berlin 1 production false` params: the broker id, number of listening requests before shutdown, running mode, and debug mode
 - Run Cloud
-- Run Client (if any?)
+- Start Clients and enjoy!
 
 ## Development tools
 - Drawing lat:long tool [ 1 (w/ radius on map)](https://www.freemaptools.com/radius-around-point.htm), [2](http://bboxfinder.com), and [3 (GeoJSON)](https://geojson.io/)
