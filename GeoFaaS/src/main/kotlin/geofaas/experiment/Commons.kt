@@ -90,5 +90,5 @@ object Commons {
         "Local" to "localhost")
 
     /** Misc */
-    val debug = false
+    val debug = false //TODO replace it with cmd argument project-wide
 }

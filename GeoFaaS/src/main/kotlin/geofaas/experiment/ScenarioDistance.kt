@@ -20,7 +20,7 @@ fun main(args: Array<String>) {
 
     val elapsed = measureTimeMillis {
         locations.forEachIndexed { i, loc ->
-            val reqId = RequestID(i, client.id, loc.first)
+            val reqId = RequestID(i+1, client.id, loc.first)
 
             if (i > 0)
                 client.moveTo(loc, reqId)
@@ -37,7 +37,7 @@ fun main(args: Array<String>) {
                 }
                 Measurement.log(client.id, res.second, "Done", loc.second.distanceKmTo(serverLocation).toString(), reqId)
             } // misc shows distance in km in Double format
-            else client.throwSafeException("${client.id}-($i-${loc.first}): NOOOOOOOOOOOOOOO Response! (${res.second}ms)")
+            else client.throwSafeException("${client.id}-(${i+1}-${loc.first}): NOOOOOOOOOOOOOOO Response! (${res.second}ms)")
         }
     }
 
