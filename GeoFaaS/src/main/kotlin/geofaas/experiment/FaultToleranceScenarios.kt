@@ -13,12 +13,13 @@ object FaultToleranceScenarios {
      // synchronously starts and calls a given function for each thread in the array.
     fun runThreaded(numClients: Int, numRequests: Int, function: String,
                     locations: List<Pair<String, Location>>,
-                    ackT: Int, resT: Int, retries: Int, ackAttempts: Int, arrivalInterval: Long) {
+                    ackT: Int, resT: Int, retries: Int, ackAttempts: Int, arrivalInterval: Long,
+                    debug: Boolean) {
 
         val clientsPair = mutableListOf<Pair<Client, Pair<String, Location>>>()
         clientsPair.addAll( // all clients will start connecting to the broker here
             locations.mapIndexed { i, p ->
-                Client(p.second, Commons.debug, Commons.brokerAddresses["Potsdam"]!!, 60001, "Client${i+1}",
+                Client(p.second, debug, Commons.brokerAddresses["Potsdam"]!!, 60001, "Client${i+1}",
                     ackT, resT) to p
             }
         )
@@ -38,7 +39,7 @@ object FaultToleranceScenarios {
 
                 // launch the experiment
                  if (arrivalInterval >= 0) {
-                     nonMovingCallsWithArrivalInterval(clientsPair[i], numRequests, function, retries, ackAttempts, ackT, resT, arrivalInterval)
+                     nonMovingCallsWithArrivalInterval(clientsPair[i], numRequests, function, retries, ackAttempts, ackT, resT, arrivalInterval, debug)
                  } else {
                      nonMovingCalls(clientsPair[i], numRequests, function, retries, ackAttempts)
                  }
@@ -89,14 +90,14 @@ object FaultToleranceScenarios {
         Measurement.log(client.id, elapsed, "byCloud/Edge", "$cloudCounter;$edgeCounter", null)
     }
 
-    private fun nonMovingCallsWithArrivalInterval(clientPair: Pair<Client, Pair<String, Location>>, numRequests: Int, function: String, retries: Int, ackAttempts: Int, ackT: Int, resT: Int, arrivalInterval: Long) {
+    private fun nonMovingCallsWithArrivalInterval(clientPair: Pair<Client, Pair<String, Location>>, numRequests: Int, function: String, retries: Int, ackAttempts: Int, ackT: Int, resT: Int, arrivalInterval: Long, debug: Boolean) {
         val client = clientPair.first
         val locPair = clientPair.second
         val cloudCounter = AtomicInteger(); val edgeCounter = AtomicInteger()
         val tempClients = mutableListOf(client)
         tempClients.addAll( // all clients will start connecting to the broker here
             (2..numRequests).map { i ->
-                Client(locPair.second, Commons.debug, Commons.brokerAddresses["Potsdam"]!!, 60001, client.id +"($i)",
+                Client(locPair.second, debug, Commons.brokerAddresses["Potsdam"]!!, 60001, client.id +"($i)",
                     ackT, resT)
             }
         )

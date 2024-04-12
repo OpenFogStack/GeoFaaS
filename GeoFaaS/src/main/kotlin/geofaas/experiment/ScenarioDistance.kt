@@ -8,10 +8,11 @@ import geofaas.Model.FunctionMessage
 import geofaas.Model.RequestID
 import kotlin.system.measureTimeMillis
 
-fun main() {
+fun main(args: Array<String>) {
+    val debug = args[0].toBoolean()
     val locations = Commons.locScenario1
     Measurement.log("", -1, "SenarioDistance (locSize)", locations.size.toString(), null)
-    val client = Client(locations.first().second, Commons.debug,
+    val client = Client(locations.first().second, debug,
         Commons.brokerAddresses["Berlin"]!!, 60001, "DistanceClient",
         4000, 4000)
     var cloudCounter = 0; var edgeCounter = 0
