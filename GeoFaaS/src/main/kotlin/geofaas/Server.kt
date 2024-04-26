@@ -27,7 +27,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
     private val mode = if(id == "GeoFaaS-Cloud") ClientType.CLOUD else ClientType.EDGE
     private val gbClient = ServerGBClient(loc, debug, host, port, id, mode, brokerAreaManager)
     private var faasRegistry = mutableListOf<TinyFaasClient>()
-    private val listeningThread = Thread { collectNewMessages() }
+    private val listeningThread = Thread ({ collectNewMessages() }, "ingestThread" )
     private var state :Boolean = false
     private var receivedCalls = AtomicInteger(); private var receivedNacks = AtomicInteger(); private var receivedRetries = AtomicInteger(); private var inProgressRequests = AtomicInteger()
 

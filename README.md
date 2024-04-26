@@ -15,7 +15,7 @@ sudo apt install -y default-jdk libavutil-dev git-core make zip
 ```
 
 ### Golang 1.20.6
-That's the version we used and tested
+The paper's version
 ```
 mkdir ~/src && cd ~/src
 wget https://go.dev/dl/go1.20.6.linux-arm64.tar.gz #for raspberries

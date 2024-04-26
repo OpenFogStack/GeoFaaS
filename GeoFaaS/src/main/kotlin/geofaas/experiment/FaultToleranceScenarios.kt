@@ -38,9 +38,9 @@ object FaultToleranceScenarios {
                 latch.await()
 
                 // launch the experiment
-                 if (arrivalInterval >= 0) {
+                 if (arrivalInterval >= 0) { // highload scenario
                      nonMovingCallsWithArrivalInterval(clientsPair[i], numRequests, function, retries, ackAttempts, ackT, resT, arrivalInterval, debug)
-                 } else {
+                 } else { // outage scenario
                      nonMovingCalls(clientsPair[i], numRequests, function, retries, ackAttempts)
                  }
             }

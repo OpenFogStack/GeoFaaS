@@ -87,13 +87,12 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         val newSubscribe: StatusCode = subscribe(topic, fence)
         if (newSubscribe == StatusCode.Success) { newTopics.add(ListeningTopic(topic, fence)) }
 
-        if (newSubscribe != StatusCode.Failure) {
+        if (newSubscribe != StatusCode.Failure) { // can be Success and AlreadyExist
             if (mode == ClientType.CLIENT) { // Client subscribes to two topics
                 val ackTopic = Topic("functions/$funcName/ack")
                 val ackSubscribe: StatusCode = subscribe(ackTopic, fence)
                 if (ackSubscribe == StatusCode.Success) { newTopics.add(ListeningTopic(ackTopic, fence)) }
-            }
-            if (mode == ClientType.CLOUD) { // Cloud subscribes to three topics
+            } else if (mode == ClientType.CLOUD) { // Cloud subscribes to three topics
                 val nackTopic = Topic("functions/$funcName/nack")
                 val nackSubscribe: StatusCode = subscribe(nackTopic, fence)
                 if (nackSubscribe == StatusCode.Success) { newTopics.add(ListeningTopic(nackTopic, fence)) }
@@ -234,7 +233,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             return StatusCode.NotExist
         }
     }
-    private fun isSubscribedTo(topic: String): Boolean { // NOTE: checks only the topic, not the fence
+    protected fun isSubscribedTo(topic: String): Boolean { // NOTE: checks only the topic, not the fence
         return listeningTopics.map { pair -> pair.topic.topic }.any { it == topic }
     }
 
@@ -383,7 +382,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             var pubStatus = processPublishAckSuccess(enqueuedAck, funcName, funcAct, timeout > 0, remainingTime) // will push to the pubQueue
             while (pubStatus.first == StatusCode.Retry){
                 logger.debug("Retry listening for a PubAck")
-                pubStatus = listenForPubAckAndProcess(funcAct, funcName, remainingTime)
+                pubStatus = listenForPubAckAndProcess(funcAct, funcName, remainingTime) //NOTE: no timeout for the server while getting a retry
             }
             return pubStatus
         }
@@ -523,8 +522,8 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             return StatusCode.Failure
         }
     }
-    // Returns Success, Failure, WrongBroker, and Retry
-    protected fun processPublishAckSuccess(pubAck: Payload?, funcName: String, funcAct: FunctionAction, withTimeout: Boolean, remainingTimeout: Int): Pair<StatusCode, BrokerInfo?> {
+    // Returns Success, Failure, WrongBroker, and Retry. Pushes to pubQueue/ackQueue
+    private fun processPublishAckSuccess(pubAck: Payload?, funcName: String, funcAct: FunctionAction, withTimeout: Boolean, remainingTimeout: Int): Pair<StatusCode, BrokerInfo?> {
         val logMsg = "'$funcName' $funcAct Pub confirmation: {}"
         if (pubAck is Payload.PUBACKPayload) {
             val noError = logPublishAck(pubAck, logMsg) // logs the reasonCode

@@ -39,10 +39,8 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
         val message = gson.toJson(FunctionMessage(reqId, funcName, FunctionAction.CALL, data, TypeCode.NORMAL, "GeoFaaS", responseTopicFence))
         val messageRetryPayload = gson.toJson(FunctionMessage(reqId, funcName, FunctionAction.CALL, data, TypeCode.RETRY, "GeoFaaS", responseTopicFence))
 
-        // call with retries
+        // call with retries (includes receiving GF Ack)
         val pubStatus = pubCallAndGetAck(message, funcName, pubFence, retries, ackAttempts, messageRetryPayload, reqId, false)
-//        Measurement.logRuntime(id, "PubCall", "normal;retry=$retries;${location.lat}:${location.lon}"){
-//        }
         logger.debug("pubStatus dump: {}", pubStatus)
 
         // get the result
