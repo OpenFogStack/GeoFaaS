@@ -10,49 +10,61 @@ import kotlin.system.measureTimeMillis
 import geofaas.Model.RequestID
 
 object Measurement {
+    private val threadLocalFileMap = ThreadLocal<BufferedWriter?>()
+
     private val log4j = LogManager.getLogger("measurement") //Note:  console only
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss")
     private val timeFormat = SimpleDateFormat("HH:mm:ss.SS")
     private val timestamp = dateFormat.format(Date())
-    private val f = "logs/measurement-$timestamp.csv"
-    private val bufferedWriter: BufferedWriter = try {
-        BufferedWriter(FileWriter(f, false))
-    } catch (e: IOException) {
-        throw RuntimeException("Failed to create BufferedWriter for file", e)
-    }
-    init {
-        bufferedWriter.write("event,who,details,time,timestamp,requestId\n")
-    }
 
     fun log(who: String, time: Long, event: String, details: String, reqId: RequestID?) {
         try {
             val currentTimestamp = timeFormat.format(Date())
-            if(reqId == null) {
-                log4j.info("$who (${time}ms) [$event]: {$details}")
-                bufferedWriter.write("$event,$who,$details,$time,$currentTimestamp,")
-            } else {
+            val fileWriter = getOrCreateFileWriter()
+            fileWriter.write("$event,$who,$details,$time,$currentTimestamp")
+            if (reqId != null) {
+                fileWriter.write(",${reqId.reqNum};${reqId.clientId};${reqId.place}")
                 log4j.info("$who (${time}ms) [$event]: {$details} req: ${reqId.clientId}-${reqId.reqNum}@${reqId.place}")
-                bufferedWriter.write("$event,$who,$details,$time,$currentTimestamp,${reqId.reqNum};${reqId.clientId};${reqId.place}")
+            } else {
+                log4j.info("$who (${time}ms) [$event]: {$details}")
             }
-            bufferedWriter.newLine()
-            bufferedWriter.flush()
+            fileWriter.newLine()
+            fileWriter.flush()
         } catch (e: IOException) {
-            throw RuntimeException("Failed to write log message to file: $f", e)
+            throw RuntimeException("Failed to write log message to file", e)
         }
     }
+
+    private fun getOrCreateFileWriter(): BufferedWriter {
+        var fileWriter = threadLocalFileMap.get()
+        if (fileWriter == null) {
+            val timestamp = dateFormat.format(Date())
+            val threadName = Thread.currentThread().name.replace(" ", "_")
+            val fileName = "logs/meas-$timestamp-$threadName.csv"
+            try {
+                fileWriter = BufferedWriter(FileWriter(fileName, true))
+                fileWriter.write("event,who,details,time,timestamp,requestId\n")
+                threadLocalFileMap.set(fileWriter)
+            } catch (e: IOException) {
+                throw RuntimeException("Failed to create BufferedWriter for file", e)
+            }
+        }
+        return fileWriter
+    }
+
 
     fun close() {
-        try {
-            bufferedWriter.close()
-        } catch (e: IOException) {
-            throw RuntimeException("Failed to close BufferedWriter for file: $f", e)
+        val fileWriter = threadLocalFileMap.get()
+        if (fileWriter != null) {
+            try {
+                fileWriter.close()
+            } catch (e: IOException) {
+                throw RuntimeException("Failed to close BufferedWriter for file", e)
+            } finally {
+                threadLocalFileMap.remove()
+            }
         }
     }
-
-//    fun log(who: String, time: Long, data: String, misc: String) {
-//        // Note: you can comma separate the data and misc
-//        log4j.info("$who (${time}ms) [$data]: {$misc}")
-//    }
 
     fun <T> logRuntime(who: String, event: String, details: String, reqId: RequestID?, block: () -> T): T {
         val result: T
