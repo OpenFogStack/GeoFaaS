@@ -27,29 +27,34 @@ object FaultToleranceScenarios {
         // Create a latch to synchronize the start of all threads.
         val latch = java.util.concurrent.CountDownLatch(numClients)
 
-         val threads = Array<Thread?>(numClients){null}
-         for (i in 0 until numClients) {
-             threads[i] = thread {
-                println("Thread $i with id ${Thread.currentThread().id} is running")
-
+         val threads = Array(numClients) { i ->
+             val clientId = i + 1
+             val threadName = "Client-$clientId"
+             Thread(Runnable {
+                 println("Thread $threadName with id ${Thread.currentThread().id} is running")
 
                 // Wait for all threads to start.
                 latch.countDown()
                 latch.await()
+                 // Wait for all threads to start.
+                 latch.countDown()
+                 latch.await()
 
-                // launch the experiment
+                 // launch the experiment
                  if (arrivalInterval >= 0) { // highload scenario
                      nonMovingCallsWithArrivalInterval(clientsPair[i], numRequests, function, retries, ackAttempts, ackT, resT, arrivalInterval, debug)
                  } else { // outage scenario
                      nonMovingCalls(clientsPair[i], numRequests, function, retries, ackAttempts)
                  }
-            }
-        }
+             }, threadName)
+         }
 
-        // Wait for all threads to finish.
-        for (thread in threads) {
-            thread!!.join()
-        }
+         // Call start to initiate execution
+         threads.forEach { it.start() }
+
+
+         // Wait for all threads to finish.
+         threads.forEach { it.join() }
          Measurement.close()
     }
 
