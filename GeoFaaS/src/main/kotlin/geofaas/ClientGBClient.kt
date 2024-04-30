@@ -16,23 +16,26 @@ import geofaas.Model.StatusCode
 import geofaas.Model.RequestID
 import geofaas.experiment.Measurement
 import org.apache.logging.log4j.LogManager
-import kotlin.math.log
 
 class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", port: Int = 5559, id: String = "ClientGeoFaaS1", private val ackTimeout: Int = 8000, private val resTimeout: Int = 3000): GeoBrokerClient(loc, ClientType.CLIENT, debug, host, port, id) {
     private val logger = LogManager.getLogger()
 //    private val getAckAttempts = 2
 
-    fun callFunction(funcName: String, data: String, retries: Int = 0, ackAttempts: Int = 0, radiusDegree: Double = 0.1, reqId: RequestID, isWithCloudRetry: Boolean = true): FunctionMessage? {
+    fun callFunction(funcName: String, data: String, retries: Int = 0, ackAttempts: Int = 0, radiusDegree: Double = 0.1, reqId: RequestID, isWithCloudRetry: Boolean = true, isContinousCall: Boolean = false): FunctionMessage? {
         logger.info("calling '$funcName($data)'")
         val pubFence = Geofence.circle(location, radiusDegree)
         val subFence = Geofence.circle(location, radiusDegree) // subFence is better to be as narrow as possible (if the client is not moving, zero)
-        // Subscribe for the response
-        val subTopics: MutableSet<ListeningTopic>? = Measurement.logRuntime(id, "SubFunction", "${location.lat}:${location.lon}", reqId){
-            subscribeFunction(funcName, subFence)
-        }
-        if (subTopics == null) // if success, it is either empty or contains newly subscribed functions
-            logger.warn("Failed to subscribe to /result and /ack. Assume calling to a wrong broker, continuing...")
 
+        // Subscribe for the response
+        if (isSubscribedTo("functions/$funcName/result")){ // skip if already subscribed
+            logger.debug("already subscribed to $funcName results, skipping subscription")
+        } else {
+            val subTopics: MutableSet<ListeningTopic>? = Measurement.logRuntime(id, "SubFunction", "${location.lat}:${location.lon}", reqId){
+                subscribeFunction(funcName, subFence)
+            }
+            if (subTopics == null) // if success, it is either empty or contains newly subscribed functions
+                logger.warn("Failed to subscribe to /result and /ack. Assume calling to a wrong broker, continuing...")
+        }
         // create Call message
         var result: FunctionMessage? = null
         val responseTopicFence = ResponseInfoPatched(id, Topic("functions/$funcName/result"), subFence.toJson())
@@ -95,11 +98,13 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
         }
 
         // remove subscriptions
-        val unSubscribedTopics = unsubscribeFunction(funcName)
-        if (unSubscribedTopics.size > 0)
-            logger.info("cleaned subscriptions for '$funcName' call (${unSubscribedTopics.size} in total)")
-        else
-            logger.error("problem with cleaning subscriptions after calling '$funcName'")
+        if(!isContinousCall) {
+            val unSubscribedTopics = unsubscribeFunction(funcName)
+            if (unSubscribedTopics.size > 0)
+                logger.info("cleaned subscriptions for '$funcName' call (${unSubscribedTopics.size} in total)")
+            else
+                logger.error("problem with cleaning subscriptions after calling '$funcName'")
+        }
 
         logger.debug("clearing pubQueue ({} messages) and ackQueue ({} messages)", pubQueue.size, ackQueue.size)
         pubQueue.clear(); ackQueue.clear()

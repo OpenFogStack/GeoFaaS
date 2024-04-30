@@ -68,7 +68,7 @@ object FaultToleranceScenarios {
                 val reqId = RequestID(i, client.id, locPair.first)
 
                 val res: Pair<FunctionMessage?, Long> =
-                    client.call(function, "", reqId, retries, ackAttempts, false)
+                    client.call(function, "", reqId, retries, ackAttempts, isWithCloudRetry = false, isContinousCall = true)
                 // Note: call's run time also depends on number of the retries
                 if (res.first != null) {
                     val serverInfo = res.first!!.responseTopicFence
