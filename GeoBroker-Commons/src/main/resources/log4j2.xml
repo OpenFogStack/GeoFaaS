@@ -4,11 +4,8 @@
         <Console name="Console" target="SYSTEM_OUT">
             <PatternLayout pattern="%highlight{%d{HH:mm:ss.SSS} [%-15t] %-5level %-30c{2} - %msg%n}"/>
         </Console>
-        <File name="File" fileName="logs/commons.log" append="false">
-            <PatternLayout pattern="%highlight{%d{HH:mm:ss.SSS} [%-15t] %-5level %-30c{2} - %msg%n}"/>
-        </File>
-<!--        <File name="Measurement" fileName="logs/measurement.log" append="false">-->
-<!--            <PatternLayout pattern="%d{HH:mm:ss.SSS} [%-15t] %-5level >>> %msg%n"/>-->
+<!--        <File name="File" fileName="logs/commons.log" append="false">-->
+<!--            <PatternLayout pattern="%highlight{%d{HH:mm:ss.SSS} [%-15t] %-5level %-30c{2} - %msg%n}"/>-->
 <!--        </File>-->
         <Console name="Measurement_Console" target="SYSTEM_OUT">
             <PatternLayout pattern="%d{HH:mm:ss.SSS} [%-15t] %-35level >>> %msg%n"/>
@@ -17,11 +14,11 @@
     <Loggers>
         <Root level="info" additivity="false">
             <AppenderRef ref="Console"/>
-            <AppenderRef ref="File"/>
+<!--            <AppenderRef ref="File"/>-->
         </Root>
         <Logger name="de.hasenburg.geobroker.commons.communication.ZMQControlUtility" level="info" additivity="false">
             <AppenderRef ref="Console"/>
-            <AppenderRef ref="File"/>
+<!--            <AppenderRef ref="File"/>-->
         </Logger>
         <Logger name="measurement" level="info" additivity="false">
 <!--            <AppenderRef ref="Measurement"/>-->

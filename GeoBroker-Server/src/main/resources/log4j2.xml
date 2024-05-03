@@ -4,19 +4,19 @@
         <Console name="Console" target="SYSTEM_OUT">
             <PatternLayout pattern="%highlight{%d{HH:mm:ss.SSS} [%-15t] %-5level %-30c{2} - %msg%n}"/>
         </Console>
-        <File name="File" fileName="logs/server.log" append="false">
-            <PatternLayout pattern="%highlight{%d{HH:mm:ss.SSS} [%-15t] %-5level %-30c{2} - %msg%n}"/>
-        </File>
+<!--        <File name="File" fileName="logs/server.log" append="false">-->
+<!--            <PatternLayout pattern="%highlight{%d{HH:mm:ss.SSS} [%-15t] %-5level %-30c{2} - %msg%n}"/>-->
+<!--        </File>-->
     </Appenders>
     <Loggers>
         <Root level="info" additivity="false">
             <AppenderRef ref="Console"/>
-            <AppenderRef ref="File"/>
+<!--            <AppenderRef ref="File"/>-->
         </Root>
         <Logger name="de.hasenburg.geobroker.server.matching.DisGBAtSubscriberMatchingLogic" level="debug"
                 additivity="false">
             <AppenderRef ref="Console"/>
-            <AppenderRef ref="File"/>
+<!--            <AppenderRef ref="File"/>-->
         </Logger>
     </Loggers>
 </Configuration>
