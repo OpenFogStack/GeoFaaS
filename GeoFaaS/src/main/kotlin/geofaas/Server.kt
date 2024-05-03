@@ -63,7 +63,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
         val listeningMsg = if (mode == ClientType.CLOUD) "CALL(/retry) or NACK" else "CALL"
         coroutineScope {
             repeat(epocs) {
-                val newMsg :FunctionMessage? = gbClient.listenForFunction(listeningMsg, 0) // blocking
+                val newMsg :FunctionMessage? = gbClient.listenForFunction(listeningMsg, 0, null) // blocking
                 launch {
                     val epocTime = handleNextRequest(newMsg)
                     Measurement.log(serverName, epocTime, "processed-${it+1}", "$receivedCalls;$receivedNacks", null, logToCsv)

@@ -197,8 +197,8 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
         // Wait for GeoFaaS's response
         var ack: FunctionMessage?
         do {
-            ack = listenForFunction("ACK", timeout)
-        } while (ack != null && ack.reqId != reqId)//ack.receiverId != id) // post-process receiver-id. as in pub/sub you may also need messages with other receiver ids
+            ack = listenForFunction("ACK", timeout, reqId)
+        } while (ack != null && ack.reqId != reqId) // post-process receiver-id. as in pub/sub you may also need messages with other receiver ids
 
         if (ack != null) {
             if (ack.funcAction == FunctionAction.ACK) {
@@ -219,7 +219,7 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
         var resultCounter = 0
         Measurement.logRuntime(id, "RESULT;Received", "timeout=$timeout", reqId){
             do {
-                res = listenForFunction("RESULT", timeout)
+                res = listenForFunction("RESULT", timeout, reqId)
                 resultCounter++
             } while (res != null && res!!.reqId != reqId)
         }

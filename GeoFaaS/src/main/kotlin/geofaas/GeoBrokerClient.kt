@@ -13,6 +13,7 @@ import geofaas.Model.FunctionMessage
 import geofaas.Model.ListeningTopic
 import geofaas.Model.ClientType
 import geofaas.Model.FunctionAction
+import geofaas.Model.RequestID
 import geofaas.Model.StatusCode
 import geofaas.experiment.Measurement
 import org.apache.logging.log4j.Level
@@ -237,7 +238,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         return listeningTopics.map { pair -> pair.topic.topic }.any { it == topic }
     }
 
-    fun listenForFunction(type: String, timeout: Int): FunctionMessage? {
+    fun listenForFunction(type: String, timeout: Int, reqId: RequestID?): FunctionMessage? {
         // wiki: function call/ack/nack/result
         val msgPayload: Payload?
         var remainingTime: Int = 0
@@ -292,10 +293,11 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                         }
                     }
                     ClientType.CLIENT -> { // FIXME: client monkey patch to avoid stuck with a sequentially-wrong message. should drop/differentiate the result/ack of a certain call and its "retry"
-                        if (message.funcAction == expectedAction)
+                        if (message.funcAction == expectedAction && message.reqId == reqId)
                             return message
                         else {
                             if(message.receiverId == id)
+                            if(message.reqId == reqId)
                                 logger.error("{} expected, but received a {}. Pushing it to the pubQueue again. pubQueue size: {}", type, message.funcAction, pubQueue.size)
                             var undeliveredPayload: Payload?
                             var undeliveredMessage: FunctionMessage? = null
@@ -352,7 +354,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         } else {
             ackQueue.add(msgPayload)
             logger.warn("Not a PUBLISHPayload! adding it to the 'ackQueue' and recalling ListenForFunction($type,$remainingTime). dump: {}", msgPayload)
-            return listenForFunction(type, remainingTime)
+            return listenForFunction(type, remainingTime, reqId)
         }
     }
     fun listenForPubAckAndProcess(funcAct: FunctionAction, funcName: String, timeout: Int): Pair<StatusCode, BrokerInfo?> {
