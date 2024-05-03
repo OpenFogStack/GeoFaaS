@@ -6,8 +6,6 @@ import de.hasenburg.geobroker.commons.model.spatial.toGeofence
 import de.hasenburg.geobroker.commons.sleepNoLog
 import org.apache.logging.log4j.LogManager
 import geofaas.experiment.Measurement.logRuntime
-import io.ktor.client.call.*
-import io.ktor.client.statement.*
 import geofaas.Model.FunctionAction
 import geofaas.Model.GeoFaaSFunction
 import geofaas.Model.ClientType
@@ -32,7 +30,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
     private var receivedCalls = AtomicInteger(); private var receivedNacks = AtomicInteger(); private var receivedRetries = AtomicInteger(); private var inProgressRequests = AtomicInteger()
 
     // returns success if success to Subscribe to all the functions
-    suspend fun registerFaaS(tf: TinyFaasClient): StatusCode {
+    fun registerFaaS(tf: TinyFaasClient): StatusCode {
         val funcs: Set<GeoFaaSFunction>
         val funcListTime = measureTimeMillis { funcs = tf.remoteFunctions()!! }
         Measurement.log(gbClient.id, funcListTime, "FaaS;getFuncs", funcs.joinToString(separator = ";") { it.name }, null)
@@ -90,9 +88,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
     }
 
     // returns run time
-    private suspend fun handleNextRequest(newMsg :FunctionMessage?): Long {
-//        val listeningMsg = if (mode == ClientType.CLOUD) "CALL(/retry) or NACK" else "CALL"
-//        val newMsg :FunctionMessage? = gbClient.listenForFunction(listeningMsg, 0) // blocking
+    private fun handleNextRequest(newMsg :FunctionMessage?): Long {
         return measureTimeMillis {
             inProgressRequests.incrementAndGet()
             if (newMsg != null) {
@@ -117,7 +113,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
                             bestAvailFaaS(newMsg.funcName, null)
                         }
                         val beforeCallInProgress = inProgressRequests.get()
-                        val response: Pair<HttpResponse?, Boolean>
+                        val response: Pair<okhttp3.Response?, Boolean>
                         val faasTime = measureTimeMillis { response = selectedFaaS.call(newMsg.funcName, newMsg.data) }
                         Measurement.log(gbClient.id, faasTime, "FaaS;Response", "${newMsg.funcName}(${newMsg.data})", newMsg.reqId)
                         logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
@@ -128,13 +124,12 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
                         if (response.first != null && response.second && gbClient.id != "GeoFaaS-Berlin") {
                             val responseBody: String = response.first!!.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
                             logRuntime(newMsg.responseTopicFence.senderId, "Result;sent", newMsg.funcName, newMsg.reqId){
+                            val responseBody: String =
+                                response.first!!.body?.string()?.trimEnd() ?: ""//NOTE: tinyFaaS's response always has a trailing '\n'
                                 gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.reqId)
                             }
                             logger.info("Sent the result '{}' to functions/${newMsg.funcName}/result for {}", responseBody, newMsg.responseTopicFence.senderId) // wiki: Found 1229 primes under 10000
                         } else { // connection refused?
-    //                        val selectedFaaS2: TinyFaasClient = bestAvailFaaS(newMsg.funcName, listOf(selectedFaaS)) // 2nd best faas
-    //                        val response2 = selectedFaaS.call(newMsg.funcName, newMsg.data)
-    //                        logger.debug("FaaS's raw Response: {}", response2)
                             //TODO call another FaaS or offload if there is no more FaaS serving the func
                             logger.error("No/Bad response from '${selectedFaaS.host}:${selectedFaaS.port}' FaaS when calling '${newMsg.funcName}'. beforeCall:current #in-progress: $beforeCallInProgress:${inProgressRequests.get()}")
                             if(mode == ClientType.CLOUD)
@@ -165,13 +160,13 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
                         val selectedFaaS: TinyFaasClient = logRuntime(gbClient.id, "Select;FaaS", "between: ${registeredFunctions.joinToString(separator = ";")}", newMsg.reqId) {
                             bestAvailFaaS(newMsg.funcName, null)
                         }
-                        val response: Pair<HttpResponse?, Boolean>
+                        val response: Pair<okhttp3.Response?, Boolean>
                         val faasTime = measureTimeMillis { response = selectedFaaS.call(newMsg.funcName, newMsg.data) }
                         Measurement.log(gbClient.id, faasTime, "FaaS;Response", "${newMsg.funcName}(${newMsg.data})", newMsg.reqId)
                         logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
 
                         if (response.first != null && response.second) {
-                            val responseBody: String = response.first!!.body<String>().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
+                            val responseBody: String = response.first!!.body.toString().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
 //                        GlobalScope.launch{
                             logRuntime(newMsg.responseTopicFence.senderId, "Result;sent", newMsg.funcName, newMsg.reqId){
                                 gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.reqId, true)
