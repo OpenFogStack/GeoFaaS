@@ -4,6 +4,7 @@ import de.hasenburg.geobroker.commons.model.spatial.Location
 import geofaas.Client
 import geofaas.Model.FunctionMessage
 import geofaas.Model.RequestID
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
@@ -114,25 +115,32 @@ object FaultToleranceScenarios {
         val locPair = clientPair.second
         val cloudCounter = AtomicInteger(); val edgeCounter = AtomicInteger()
         val tempClients = mutableListOf(client)
-        tempClients.addAll( // all clients will start connecting to the broker here
-            (2..numRequests).map { i ->
-                Client(locPair.second, debug, Commons.brokerAddresses["Potsdam"]!!, 60001, client.id +"($i)",
-                    ackT, resT)
-            }
-        )
+//        tempClients.addAll( // all clients will start connecting to the broker here
+//            (2..numRequests).map { i ->
+//                Client(locPair.second, debug, Commons.brokerAddresses["Potsdam"]!!, 60001, client.id +"($i)",
+//                    ackT, resT)
+//            }
+//        )
         Measurement.log(client.id, -1, "Started at", locPair.first, null)
 
-        val threads = Array<Thread?>(numRequests){null}
-        var failedResponse = false
+        val threads = Array<Thread?>(numRequests){ null }
         val elapsed = measureTimeMillis {
-            tempClients.forEachIndexed { i, c ->
-                if(!failedResponse) {
+//            tempClients.forEachIndexed { i, c ->
+            for (i in 0 until numRequests) {
+                if(!gotaNoResponse.get()) {
+                    val c = if (i == 0) {
+                        client
+                    } else {
+                        Client(locPair.second, debug, Commons.brokerAddresses["Potsdam"]!!, 60001, client.id + "($i)",
+                            ackT, resT)
+                    }
                     val reqId = RequestID(i+1, c.id, locPair.first)
 
-                    threads[i] = thread {
+                    val shortName = c.id.replace("Client", "c").replace("(", "_").replace(")", "")
+                    threads[i] = thread(name = "highload-$shortName") {
 //                        val startTime = System.currentTimeMillis()
                         val res: Pair<FunctionMessage?, Long> =
-                            c.call(function, "", reqId, retries, ackAttempts, false)
+                            c.call(function, "", reqId, retries, ackAttempts, isWithCloudRetry = false, isContinousCall = true)
                         // Note: call's run time also depends on number of the retries
                         if (res.first != null) {
                             val serverInfo = res.first!!.responseTopicFence
