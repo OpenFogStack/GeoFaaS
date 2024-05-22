@@ -42,7 +42,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
                 gbClient.registerFunctions(funcs, gbClient.brokerAreaManager.ownBrokerArea.coveredArea)
             }
             return if (registerSuccess == StatusCode.Success) {
-                logger.info("new FaaS's functions have been registered")
+                logger.info("new FaaS's functions have been registered. address:{}:{}", tf.host, tf.port)
                 faasRegistry += tf
                 logger.info("registered a new FaaS with funcs: ${funcs.map { f -> f.name }}")
                 StatusCode.Success
@@ -133,7 +133,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
                             logger.info("Sent the result '{}' to functions/${newMsg.funcName}/result for {}", responseBody, newMsg.responseTopicFence.senderId) // wiki: Found 1229 primes under 10000
                         } else { // connection refused?
                             //TODO call another FaaS or offload if there is no more FaaS serving the func
-                            logger.error("No/Bad response from '${selectedFaaS.host}:${selectedFaaS.port}' FaaS when calling '${newMsg.funcName}'. beforeCall:current #in-progress: $beforeCallInProgress:${inProgressRequests.get()}")
+                            logger.error("No/Bad response from '${selectedFaaS.host}:${selectedFaaS.port}' FaaS when calling '${newMsg.funcName}'. #in-progress 'beforeCall:current': $beforeCallInProgress:${inProgressRequests.get()}")
                             if(mode == ClientType.CLOUD)
                                 logger.error("The Client will NOT receive any response! This is end of the line of offloading")
                             else {
@@ -168,13 +168,12 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
                         logger.debug("FaaS's raw Response: {}", response) // HttpResponse[http://localhost:8000/sieve, 200 OK]
 
                         if (response.first != null && response.second) {
-                            val responseBody: String = response.first!!.body.toString().trimEnd() //NOTE: tinyFaaS's response always has a trailing '\n'
-//                        GlobalScope.launch{
+                            val responseBody: String =
+                                response.first!!.body?.string()?.trimEnd() ?: ""//NOTE: tinyFaaS's response always has a trailing '\n'
                             logRuntime(newMsg.responseTopicFence.senderId, "Result;sent", newMsg.funcName, newMsg.reqId, logToCsv){
                                 gbClient.sendResult(newMsg.funcName, responseBody, clientFence, newMsg.reqId, true)
                             }
                             logger.info("Sent the result '{}' to functions/${newMsg.funcName}/result for {}", responseBody, newMsg.responseTopicFence.senderId) // wiki: Found 1229 primes under 10000
-//                        }
                         } else { // connection refused?
                             logger.error("No/Bad response from the FaaS with '${selectedFaaS.host}:${selectedFaaS.port}' address when calling '${newMsg.funcName}'")
 //                        gbClient.sendNack(newMsg.funcName, newMsg.data, clientFence)
