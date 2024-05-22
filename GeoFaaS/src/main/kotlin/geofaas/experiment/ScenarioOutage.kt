@@ -6,11 +6,12 @@ fun main(args: Array<String>) {
     val debug = args[2].toBoolean()
     val locations = Commons.locPotsdamClients.take(numClients)
 
-    Measurement.log("", -1, "SenarioOutage (numCl/numReq)", "$numClients;$numRequests", null)
+//    Measurement.log("", -1, "ScenarioOutage (numCl/numReq)", "$numClients;$numRequests", null)
     // run the experiment
     FaultToleranceScenarios.runThreaded(
         numClients, numRequests, "sieve",
         locations,
-        1000, 4000, 1, 2, -1L, debug
+//        200, 300, 1, 1, -1L, debug
+        70, 70, 1, 1, -1L, debug
     )
 }

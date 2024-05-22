@@ -1,10 +1,12 @@
 package de.hasenburg.geobroker.server.main
 
+import de.hasenburg.geobroker.commons.setLogLevel
 import de.hasenburg.geobroker.server.main.server.*
 import de.hasenburg.geobroker.server.main.server.other.SingleNoGeoServerLogic
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.client.exporter.HTTPServer
 import io.prometheus.client.hotspot.DefaultExports
+import org.apache.logging.log4j.Level
 import org.apache.logging.log4j.LogManager
 import java.io.IOException
 
@@ -16,6 +18,7 @@ private val logger = LogManager.getLogger()
  * You can also provide a file path from which the configuration will be parsed.
  */
 fun main(args: Array<String>) {
+//    setLogLevel(logger, Level.DEBUG)  ////////////////// <---- \\\\\\\\\\\\\\\ //\\
 
     // read in configuration
     val configuration: Configuration = if (args.isNotEmpty()) {
