@@ -13,6 +13,7 @@ import geofaas.Model.FunctionMessage
 import geofaas.Model.StatusCode
 import geofaas.Model.TypeCode
 import geofaas.experiment.Measurement
+import kotlinx.coroutines.*
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import sun.misc.Signal
@@ -64,7 +65,7 @@ class Server(loc: Location, debug: Boolean, host: String = "localhost", port: In
         coroutineScope {
             repeat(epocs) {
                 val newMsg :FunctionMessage? = gbClient.listenForFunction(listeningMsg, 0, null) // blocking
-                launch {
+                launch(Dispatchers.IO) {
                     val epocTime = handleNextRequest(newMsg)
                     Measurement.log(serverName, epocTime, "processed-${it+1}", "$receivedCalls;$receivedNacks", null, logToCsv)
                 }
