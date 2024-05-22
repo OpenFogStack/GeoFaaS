@@ -201,13 +201,20 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
         } while (ack != null && ack.reqId != reqId) // post-process receiver-id. as in pub/sub you may also need messages with other receiver ids
 
         if (ack != null) {
-            if (ack.funcAction == FunctionAction.ACK) {
-                if(ack.typeCode != TypeCode.NORMAL) logger.warn("'${ack.typeCode}' type for Ack is not handled! Ignoring it")
-                logger.info("the Ack received from '{}'", ack.responseTopicFence.senderId)
-                return ack.responseTopicFence.senderId
-            } else {
-                logger.error("expected an Ack but received '{}'", ack.funcAction)
-                return null
+            when (ack.funcAction) {
+                FunctionAction.ACK -> {
+                    if(ack.typeCode != TypeCode.NORMAL) logger.warn("'${ack.typeCode}' type for Ack is not handled! Ignoring it")
+                    logger.info("the Ack received from '{}'", ack.responseTopicFence.senderId)
+                    return ack.responseTopicFence.senderId
+                }
+                FunctionAction.RESULT -> { // ignore ack if received an early result
+                    logger.warn("An early Result received from '{}' when expecting an Ack. Ignoring the Ack now. ID: {}", ack.responseTopicFence.senderId, ack.reqId)
+                    return ack.responseTopicFence.senderId
+                }
+                else -> {
+                    logger.error("expected an Ack but received '{}'", ack.funcAction)
+                    return null
+                }
             }
         } else {
             logger.error("Expected an ACK in ${timeout}ms, but null response received from GeoBroker!")
@@ -223,7 +230,7 @@ class ClientGBClient(loc: Location, debug: Boolean, host: String = "localhost", 
                 resultCounter++
             } while (res != null && res!!.reqId != reqId)
         }
-        logger.info("{} Message(s) processed when listening for the result", resultCounter)
+        logger.debug("{} Message(s) processed when listening for the result", resultCounter)
 
         if(res?.funcAction == FunctionAction.RESULT) return res
         else logger.error("Expected a RESULT, but received: {}", res)

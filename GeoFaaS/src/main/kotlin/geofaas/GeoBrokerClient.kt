@@ -217,8 +217,12 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             } else if(unsubAck is Payload.PUBLISHPayload) {
                 val message = gson.fromJson(unsubAck.content, FunctionMessage::class.java)
                 if (message.receiverId == id) {
-                    pubQueue.add(unsubAck)
-                    logger.warn("Not a unSubAck ! adding it to the 'pubQueue'. dump: {}", unsubAck)
+                    if (mode == ClientType.CLIENT) {
+                        logger.warn("Not a unSubAck ! Dropping client late Ack/Res. dump: {}", unsubAck)
+                    } else {
+                        pubQueue.add(unsubAck)
+                        logger.warn("Not a unSubAck ! adding it to the 'pubQueue'. dump: {}", unsubAck)
+                    }
                 }
                 return unsubscribe(topic) // it's okay to resend UNSub Payload again
             } else if (unsubAck == null) {
@@ -295,16 +299,26 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                     ClientType.CLIENT -> { // FIXME: client monkey patch to avoid stuck with a sequentially-wrong message. should drop/differentiate the result/ack of a certain call and its "retry"
                         if (message.funcAction == expectedAction && message.reqId == reqId)
                             return message
-                        else {
-                            if(message.receiverId == id)
+                        else if (message.funcAction == FunctionAction.RESULT && expectedAction == FunctionAction.ACK) {
+                            if (message.reqId == reqId){ // bypass probable results for a different call
+                                pubQueue.add(msgPayload)
+                                logger.debug(
+                                    "Expected an Ack but received the Result earlier. Putting it back to pubQueue  {}", message.reqId)
+                            } else
+                                logger.debug("Expected an Ack for 'num: {}', but received a Result for another req '{}'! Dropping it", reqId?.reqNum, message.reqId)
+                            return message
+                        } else {
                             if(message.reqId == reqId)
                                 logger.error("{} expected, but received a {}. Pushing it to the pubQueue again. pubQueue size: {}", type, message.funcAction, pubQueue.size)
-                            var undeliveredPayload: Payload?
-                            var undeliveredMessage: FunctionMessage? = null
+
+                            var undeliveredPayload: Payload? = null
+                            var undeliveredMessage: FunctionMessage?
                             do {
+                                undeliveredMessage = null // reset undelivered msg next iteration
                                 val newListenTime = if(remainingTime <= 0) 30 else remainingTime
                                 logger.info("Listening for an undelivered $type for ${newListenTime}ms")
                                 val startTime = System.currentTimeMillis()
+
                                 undeliveredPayload = basicClient.receiveWithTimeout(newListenTime)
                                 val endTime = System.currentTimeMillis()
                                 remainingTime = (remainingTime - (endTime - startTime)).toInt()
@@ -312,25 +326,48 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                                 if(undeliveredPayload is Payload.PUBLISHPayload){
                                     undeliveredMessage = gson.fromJson(undeliveredPayload.content, FunctionMessage::class.java)
                                     if (undeliveredMessage.receiverId == id) {
-                                        if(undeliveredMessage.funcAction == expectedAction){
-                                            logger.debug("new undeliverd message: {}", undeliveredMessage)
-                                            if(message.receiverId == id) {
-                                                logger.debug("putting the previous Pub message to the pubQueue")
-                                                pubQueue.add(msgPayload) // put the wrong message back
+                                        logger.debug("new undeliverd message: {}", undeliveredMessage)
+                                        if (undeliveredMessage.reqId == reqId) {
+                                            if(undeliveredMessage.funcAction == expectedAction){
+                                                if(message.receiverId == id) {
+                                                    if (expectedAction == FunctionAction.RESULT && message.funcAction == FunctionAction.ACK && undeliveredMessage.reqId == message.reqId) { // if it is a late ack
+                                                        logger.debug("Dropping received Ack when expecting the Result. dump: {}", message)
+                                                    } else if(message.reqId.reqNum >= reqId.reqNum) {
+                                                        logger.debug("putting the previous Pub message to the pubQueue")
+                                                        pubQueue.add(msgPayload) // put the wrong message back
+                                                    } else
+                                                        logger.debug("Dropping msg from previous requests ({}) when expecting {} or higher. dump: {}", message.reqId.reqNum, reqId.reqNum, message)
+                                                } else
+                                                    logger.debug("got an undeliverd {}, but dropping last unexpected message. dump: {}", expectedAction, message)
+                                                return undeliveredMessage
+                                            } else
+                                                logger.debug("undelivered msg isn't a {}. dump {}", expectedAction, undeliveredMessage)
+                                            if(expectedAction == FunctionAction.RESULT && undeliveredMessage.funcAction == FunctionAction.ACK) {
+                                                logger.debug("Dropping late (undelivered) Ack when expecting the Result from the same request. reqNum: {}", undeliveredMessage.reqId)
+                                            } else {
+                                                pubQueue.add(undeliveredPayload)
+                                                logger.debug("added a new PUB message before pushing {} message. dump: {}", message.funcAction, undeliveredPayload)
+                                                if (expectedAction == FunctionAction.ACK && undeliveredMessage.funcAction == FunctionAction.RESULT) {
+                                                    logger.debug("Early undelivered Result when looking for the Ack, skipping Ack")
+                                                    return undeliveredMessage
+                                                }
                                             }
-                                            return undeliveredMessage
-                                        }
-                                        pubQueue.add(undeliveredPayload)
-                                        logger.debug("added a new PUB message before pushing {} message. dump: {}", message.funcAction, undeliveredPayload)
-                                    }
+                                        } else
+                                            logger.error("received a {} for a different {}th req, current reqId: {}. Expected an undelivered {}", undeliveredMessage.funcAction, undeliveredMessage.reqId.reqNum, reqId, expectedAction)
+                                    } else
+                                        logger.debug("dropping non-recipient Pub when listening for an undelivered message")
                                 } else if(undeliveredPayload != null) {
                                     ackQueue.add(undeliveredPayload)
                                     logger.debug("added a new message to ackQueue. dump: {}", undeliveredPayload)
                                 } else
                                     logger.error("no new undelivered gb messages after {}ms. remaining timeout is: {}ms", newListenTime, remainingTime)
-                            } while (undeliveredPayload != null && undeliveredMessage != null && undeliveredMessage.receiverId != id)
-                            if(message.receiverId == id)
-                                pubQueue.add(msgPayload)
+                            } while (undeliveredPayload != null && undeliveredMessage != null && undeliveredMessage.reqId != reqId)
+
+                            if(message.reqId == reqId)
+                                if (expectedAction == FunctionAction.RESULT && message.funcAction == FunctionAction.ACK) { // if it is a late ack
+                                    logger.debug("Dropping received Ack when expecting a Result")
+                                } else
+                                    pubQueue.add(msgPayload)
                             return null
                         }
                     }
@@ -357,7 +394,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             return listenForFunction(type, remainingTime, reqId)
         }
     }
-    fun listenForPubAckAndProcess(funcAct: FunctionAction, funcName: String, timeout: Int): Pair<StatusCode, BrokerInfo?> {
+    fun listenForPubAckAndProcess(funcAct: FunctionAction, funcName: String, timeout: Int, reqId: RequestID): Pair<StatusCode, BrokerInfo?> {
         val enqueuedAck: Payload? //Note: the ack could also be a SubAck or UnSubAck, and maybe others
         enqueuedAck = when(mode) {
             ClientType.CLIENT -> ackQueue.poll() // non-blocking
@@ -373,18 +410,18 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             val pubAck = basicClient.receiveWithTimeout(timeout)
             val endTime = System.currentTimeMillis()
             remainingTime = (remainingTime - (endTime - startTime)).toInt()
-            var pubStatus = processPublishAckSuccess(pubAck, funcName, funcAct, timeout > 0, remainingTime) // will push into the pubQueue
+            var pubStatus = processPublishAckSuccess(pubAck, funcName, funcAct, timeout > 0, remainingTime, reqId) // will push into the pubQueue
             while (pubStatus.first == StatusCode.Retry){
                 logger.debug("Retry listening for a PubAck")
-                pubStatus = listenForPubAckAndProcess(funcAct, funcName, remainingTime)
+                pubStatus = listenForPubAckAndProcess(funcAct, funcName, remainingTime, reqId)
             }
             return pubStatus
         } else {
             logger.debug("(Pub) ackQueue's size is ${ackQueue.size}. dequeued: {}", enqueuedAck)
-            var pubStatus = processPublishAckSuccess(enqueuedAck, funcName, funcAct, timeout > 0, remainingTime) // will push to the pubQueue
+            var pubStatus = processPublishAckSuccess(enqueuedAck, funcName, funcAct, timeout > 0, remainingTime, reqId) // will push to the pubQueue
             while (pubStatus.first == StatusCode.Retry){
                 logger.debug("Retry listening for a PubAck")
-                pubStatus = listenForPubAckAndProcess(funcAct, funcName, remainingTime) //NOTE: no timeout for the server while getting a retry
+                pubStatus = listenForPubAckAndProcess(funcAct, funcName, remainingTime, reqId) //NOTE: no timeout for the server while getting a retry
             }
             return pubStatus
         }
@@ -525,7 +562,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
         }
     }
     // Returns Success, Failure, WrongBroker, and Retry. Pushes to pubQueue/ackQueue
-    private fun processPublishAckSuccess(pubAck: Payload?, funcName: String, funcAct: FunctionAction, withTimeout: Boolean, remainingTimeout: Int): Pair<StatusCode, BrokerInfo?> {
+    private fun processPublishAckSuccess(pubAck: Payload?, funcName: String, funcAct: FunctionAction, withTimeout: Boolean, remainingTimeout: Int, reqId: RequestID): Pair<StatusCode, BrokerInfo?> {
         val logMsg = "'$funcName' $funcAct Pub confirmation: {}"
         if (pubAck is Payload.PUBACKPayload) {
             val noError = logPublishAck(pubAck, logMsg) // logs the reasonCode
@@ -537,11 +574,17 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             logger.error("Timeout! no 'Publish ACK' received for '$funcName' $funcAct by '$id'. ackQueue size: {}", ackQueue.size)
         } else if (pubAck is Payload.PUBLISHPayload) {
             val message = gson.fromJson(pubAck.content, FunctionMessage::class.java)
-            if (message.receiverId == id) {
-                pubQueue.add(pubAck) // to be processed by listenForFunction()
-                logger.warn("Not a PUBACKPayload! adding it to the 'pubQueue'. dump: {}", pubAck)
-            }
-            return Pair(StatusCode.Retry, null)
+            if (message.reqId == reqId) {
+                    pubQueue.add(pubAck) // to be processed by listenForFunction()
+                if (funcAct == FunctionAction.CALL && message.funcAction == FunctionAction.ACK) { // get an early GF Ack before call's PubAck
+                    logger.warn("early Ack when expecting a PUBACKPayload! added it to the 'pubQueue' and skipping PubAck. Ack ID: {}", message.reqId)
+                    return Pair(StatusCode.Success, null)
+                } else {
+                    logger.warn("Not a PUBACKPayload! added it to the 'pubQueue'. dump: {}", pubAck)
+                    return Pair(StatusCode.Retry, null)
+                }
+            } else
+                return Pair(StatusCode.Retry, null)
         } else {
             logger.error("Unexpected! $logMsg", pubAck)
             if(pubAck != null) {
@@ -552,10 +595,11 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                     val undeliveredPayload: Payload? = basicClient.receiveWithTimeout(remainingTimeout2) // TODO: need to calculate new remainingTimeout
                     if(undeliveredPayload is Payload.PUBLISHPayload){
                         undeliveredMessage = gson.fromJson(undeliveredPayload.content, FunctionMessage::class.java)
-                        if(undeliveredMessage.receiverId == id) {
+                        if(undeliveredMessage.reqId == reqId) {
                             pubQueue.add(undeliveredPayload)
                             logger.debug("added a new message to pubQueue. dump: {}", undeliveredPayload)
-                        }
+                        } else
+                            logger.debug("Dropping Pub with unexpected ReqID. dump: {}", undeliveredMessage)
                     } else if(undeliveredPayload != null) {
                         ackQueue.add(undeliveredPayload)
                         logger.debug("added a new message before pushing {} to ackQueue. dump: {}", pubAck, undeliveredPayload)
@@ -563,8 +607,12 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                         logger.debug("no new undelivered gb message after 30ms")
                     }
                 }
-                logger.warn("Not a PUBACKPayload! adding it to the 'ackQueue'. dump: {}", pubAck)
-                ackQueue.add(pubAck)
+                if (mode == ClientType.CLIENT && (pubAck is Payload.UNSUBACKPayload || pubAck is Payload.SUBACKPayload)) {
+                    logger.warn("Not a PUBACKPayload! Dropping late client UnSubAck/SubAck. dump: {}", pubAck)
+                } else {
+                    logger.warn("Not a PUBACKPayload! adding it to the 'ackQueue'. dump: {}", pubAck)
+                    ackQueue.add(pubAck)
+                }
                 return Pair(StatusCode.Retry, null)
             }
         }
