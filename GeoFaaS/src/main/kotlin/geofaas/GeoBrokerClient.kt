@@ -506,9 +506,9 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
 
         if(connStatus == StatusCode.Success) {
             logger.info("connected to the {} broker", newBroker.brokerId)
-            oldBroker.send(Payload.DISCONNECTPayload(ReasonCode.NormalDisconnection)) // disconnect
-            oldBroker.tearDownClient()
-            logger.info("disconnected from the previous broker")
+//            oldBroker.send(Payload.DISCONNECTPayload(ReasonCode.NormalDisconnection))
+//            oldBroker.tearDownClient() // update: already removed from previous broker
+//            logger.info("disconnected from the previous broker")
             listeningTopics.clear()
             ackQueue.clear()
             pubQueue.clear()
