@@ -10,6 +10,7 @@ import kotlin.system.exitProcess
 import kotlin.system.measureTimeMillis
 
 object FaultToleranceScenarios {
+    private val gotaNoResponse = AtomicBoolean(false)
      // synchronously starts and calls a given function for each thread in the array.
     fun runThreaded(numClients: Int, numRequests: Int, function: String,
                     locations: List<Pair<String, Location>>,
@@ -29,21 +30,27 @@ object FaultToleranceScenarios {
 
          val threads = Array(numClients) { i ->
              val clientId = i + 1
-             val threadName = "Client-$clientId"
+             val threadName = if (arrivalInterval >= 0) "highload-c$clientId" else "outage-c$clientId"
              Thread(Runnable {
                  println("Thread $threadName with id ${Thread.currentThread().id} is running")
 
-                // Wait for all threads to start.
-                latch.countDown()
-                latch.await()
-                 // Wait for all threads to start.
-                 latch.countDown()
-                 latch.await()
-
                  // launch the experiment
                  if (arrivalInterval >= 0) { // highload scenario
+                     // Wait for all threads to start together.
+                     latch.countDown()
+                     latch.await()
+
                      nonMovingCallsWithArrivalInterval(clientsPair[i], numRequests, function, retries, ackAttempts, ackT, resT, arrivalInterval, debug)
                  } else { // outage scenario
+                     // Warmup
+                     repeat(5000) { z ->
+                         clientsPair[i].first.call(function, "", RequestID( -z, clientsPair[i].first.id, clientsPair[i].second.first),
+                             retries, ackAttempts, ackTArg = 300, resTArg = 300, isWithCloudRetry = false, isContinousCall = true)
+                     }
+                     // Wait for all threads to start together.
+                     latch.countDown()
+                     latch.await()
+
                      nonMovingCalls(clientsPair[i], numRequests, function, retries, ackAttempts)
                  }
              }, threadName)
@@ -61,10 +68,12 @@ object FaultToleranceScenarios {
     private fun nonMovingCalls(clientPair: Pair<Client, Pair<String, Location>>, numRequests: Int, function: String, retries: Int, ackAttempts: Int) {
         val client = clientPair.first
         val locPair = clientPair.second
+
         var cloudCounter = 0; var edgeCounter = 0
         Measurement.log(client.id, -1, "Started at", locPair.first, null)
         val elapsed = measureTimeMillis {
             for (i in 1..numRequests) {
+                if (gotaNoResponse.get()) {break} // break if a client got no response and finished
                 val reqId = RequestID(i, client.id, locPair.first)
 
                 val res: Pair<FunctionMessage?, Long> =
@@ -85,14 +94,19 @@ object FaultToleranceScenarios {
                     )
                 } // details shows responder server name and type of response (offload, or normal)
                 else {
+                    gotaNoResponse.set(true)
                     client.throwSafeException("${client.id}-($i-${locPair.first}): NOOOOOOOOOOOOOOO Response! (${res.second}ms)")
                     exitProcess(0) // terminates current process
                 }
             }
         }
         client.shutdown()
-        Measurement.log(client.id, elapsed, "Finished", "$numRequests requests", null)
-        Measurement.log(client.id, elapsed, "byCloud/Edge", "$cloudCounter;$edgeCounter", null)
+        if(gotaNoResponse.get()) {
+            Measurement.log(client.id, elapsed, "Failed", "$numRequests requests", null)
+        } else {
+            Measurement.log(client.id, elapsed, "Finished", "$numRequests requests", null)
+            Measurement.log(client.id, elapsed, "byCloud/Edge", "$cloudCounter;$edgeCounter", null)
+        }
     }
 
     private fun nonMovingCallsWithArrivalInterval(clientPair: Pair<Client, Pair<String, Location>>, numRequests: Int, function: String, retries: Int, ackAttempts: Int, ackT: Int, resT: Int, arrivalInterval: Long, debug: Boolean) {
@@ -134,15 +148,15 @@ object FaultToleranceScenarios {
                                 reqId
                             ) // 'details' shows responder server name and type of response (offload, or normal)
                         } else {
-                            failedResponse = true
+                            gotaNoResponse.set(true)
                             c.throwSafeException("${c.id}-(${i+1}-${locPair.first}): NOOOOOOOOOOOOOOO Response! (${res.second}ms)")
-                            exitProcess(0) // terminates current process
+//                            exitProcess(0) // terminates current process
                         }
 //                        val endTime = System.currentTimeMillis()
 //                        val runtime = endTime - startTime
                         c.shutdown()
                     }
-                    Thread.sleep(arrivalInterval * 1000L)
+                    Thread.sleep(arrivalInterval * 1000L) // to seconds
                 }
             }
             // Wait for all threads to finish.
@@ -150,7 +164,7 @@ object FaultToleranceScenarios {
                 thread?.join()
             }
         }
-        if(failedResponse) {
+        if(gotaNoResponse.get()) {
             Measurement.log(client.id, elapsed, "Failed", "$numRequests requests", null)
         } else {
             Measurement.log(client.id, elapsed, "Finished", "$numRequests requests", null)
