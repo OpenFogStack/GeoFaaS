@@ -34,15 +34,16 @@ class Client(loc: Location, debug: Boolean, host: String, port: Int,
     }
 
     // returns a pair of result and run time
-    fun call(funcName: String, param: String, reqId: RequestID, retries: Int = 0, ackAttempts: Int = 1, isWithCloudRetry: Boolean = true, isContinousCall: Boolean = false): Pair<FunctionMessage?, Long> {
+    fun call(funcName: String, param: String, reqId: RequestID, retries: Int = 0, ackAttempts: Int = 1, ackTArg: Int? = null, resTArg: Int? = null, isWithCloudRetry: Boolean = true, isContinousCall: Boolean = false): Pair<FunctionMessage?, Long> {
         val result: FunctionMessage?
         val elapsed = measureTimeMillis {
-            result = gbClient.callFunction(funcName, param, retries, ackAttempts, radius, reqId, isWithCloudRetry, isContinousCall)
+            result = gbClient.callFunction(funcName, param, retries, ackAttempts,ackTArg, resTArg, radius, reqId, isWithCloudRetry, isContinousCall)
         }
-        if (result == null)
+        if (result == null) {
             logger.error("No result received after {} retries! {}ms", retries, elapsed)
+            Measurement.log(id, elapsed,"RESULT;NoResult", "$retries retries! ${elapsed}ms", reqId)
+        }
 
-        logger.debug("my geoBroker client id: {}", gbClient.basicClient.identity)
         return Pair(result, elapsed)
     }
 
