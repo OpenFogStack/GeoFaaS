@@ -55,7 +55,7 @@ class Client(loc: Location, debug: Boolean, host: String, port: Int,
     }
 }
 
-suspend fun main() {
+fun main() {
 
     val debug = false
 //    val client = Client(locFranceToPoland.first().second, debug, brokerAddresses["Frankfurt"]!!, 5560, "client1")
