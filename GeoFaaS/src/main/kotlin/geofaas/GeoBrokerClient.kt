@@ -143,6 +143,9 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             } else if(subAck == null) {
                 logger.error("Error subscribing to '${topic.topic}' by $id. No response from the broker")
                 return StatusCode.Failure
+            } else if (mode == ClientType.CLIENT && subAck is Payload.UNSUBACKPayload) { // drop client late unsub ack
+                logger.warn("Not a SubAck! dropping client's unSubAck. dump: {}", subAck)
+                return subscribe(topic, fence)
             } else {
                 ackQueue.add(subAck)
                 logger.warn("Not a SubAck! adding it to the 'ackQueue'. dump: {}", subAck)
@@ -439,6 +442,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
                     val changeStatus = changeBroker(pubAck.brokerInfo!!)
                     if (changeStatus == StatusCode.Success) {
                         logger.info("$id's location updated to {}", location)
+                        listeningTopics.clear() // geobroker removes subscriptions? no longer valid subscriptions (fence) TODO add log
                         return Pair(StatusCode.Success, pubAck.brokerInfo)
                     } else {
                         logger.fatal("Failed to change the broker. And the previous broker is no longer responsible")
@@ -456,6 +460,7 @@ abstract class GeoBrokerClient(var location: Location, val mode: ClientType, deb
             if(pubAck.reasonCode == ReasonCode.LocationUpdated) { // success
                 location = newLoc
                 logger.info("location updated to {}", location)
+                listeningTopics.clear() // geobroker removes subscriptions? no longer valid subscriptions (fence) TODO add log
                 return Pair(StatusCode.Success, null)
             } else if(pubAck.reasonCode == ReasonCode.NotConnectedOrNoLocation){
                 location = newLoc
