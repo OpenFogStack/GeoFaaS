@@ -4,6 +4,26 @@ Yet another edge-to-cloud FaaS platform. A decenteralized solution that routes c
 Under the hood it leverages the Distributed [Geobroker](https://github.com/MoeweX/geobroker) (DisGB) and lightweight FaaS systems (e.g. [tinyFaaS](https://github.com/OpenFogStack/tinyFaaS)). 
 
 
+## Research
+
+If you use this software in a publication, please cite it as:
+
+### Text
+
+M. Malekabbasi, T. Pfandzelter, T. Schirmer, and D. Bermbach, **GeoFaaS: An Edge-to-Cloud FaaS Platform**, 2024.
+
+### BibTeX
+
+```bibtex
+@article{malekabbasi2024geofaas,
+  title={GeoFaaS: An Edge-to-Cloud FaaS Platform},
+  author={Malekabbasi, Mohammadreza and Pfandzelter, Tobias and Schirmer, Trever and Bermbach, David},
+  year={2024}
+}
+```
+
+For a full list of publications, please see [our website](https://www.tu.berlin/en/3s/research/publications).
+
 ## Remote server setup
 An editor instead of `vi`? Helix or NeoVim! , and `tmux` for remote administrations. Plus `bat`, a better `cat`!
 ```
