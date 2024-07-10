@@ -1,7 +1,7 @@
 # GeoFaaS
 
 Yet another edge-to-cloud FaaS platform. A decenteralized solution that routes client requests using their location to the closest FaaS server on the edge.  
-Under the hood it leverages the Distributed [Geobroker](https://github.com/MoeweX/geobroker) (DisGB) and lightweight FaaS systems (e.g. [tinyFaaS](https://github.com/OpenFogStack/tinyFaaS)). 
+Under the hood it leverages the Distributed [Geobroker](https://github.com/MoeweX/geobroker) (DisGB) and lightweight FaaS systems (e.g. [tinyFaaS](https://github.com/OpenFogStack/tinyFaaS)). It can also integrate to FaaS services (e.g. AWS Lambda) and act as a routing layer only.
 
 
 ## Research
