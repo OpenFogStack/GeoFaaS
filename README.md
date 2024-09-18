@@ -114,6 +114,7 @@ messageProcessors = 2
 - Start Clients and enjoy!
 
 ## Development tools
+Here are a bunch of useful geo tools we have used:
 - Drawing lat:long tool [ 1](https://www.freemaptools.com/radius-around-point.htm)(w/ radius on map), [2](http://bboxfinder.com), and [3 (GeoJSON)](https://geojson.io/)
 - [Hexagon Grid System](https://github.com/basonjui/hexagon-grid-system) to generate hexagonal areas
 - [GeoJSON to WKT](https://geojson-to-wkt-converter.onrender.com)
