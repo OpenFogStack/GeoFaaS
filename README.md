@@ -15,10 +15,16 @@ M. Malekabbasi, T. Pfandzelter, T. Schirmer, and D. Bermbach, **GeoFaaS: An Edge
 ### BibTeX
 
 ```bibtex
-@article{malekabbasi2024geofaas,
-  title={GeoFaaS: An Edge-to-Cloud FaaS Platform},
-  author={Malekabbasi, Mohammadreza and Pfandzelter, Tobias and Schirmer, Trever and Bermbach, David},
-  year={2024}
+@inproceedings{malekabbasi2024geofaas,
+    author = "Malekabbasi, Mohammadreza and Pfandzelter, Tobias and Schirmer, Trever and Bermbach, David",
+    title = "GeoFaaS: An Edge-to-Cloud FaaS Platform",
+    booktitle = "Proc. 12th IEEE Internat. Conf. Cloud Engineering",
+    month = sep,
+    year = 2024,
+    publisher = "IEEE",
+    address = "New York, NY, USA",
+    series = "IC2E '24",
+    location = "Paphos, Cyprus",
 }
 ```
 
