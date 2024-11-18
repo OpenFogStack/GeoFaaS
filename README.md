@@ -18,16 +18,16 @@ M. Malekabbasi, T. Pfandzelter, T. Schirmer, and D. Bermbach, **GeoFaaS: An Edge
 @inproceedings{malekabbasi2024geofaas,
     author = "Malekabbasi, Mohammadreza and Pfandzelter, Tobias and Schirmer, Trever and Bermbach, David",
     title = "GeoFaaS: An Edge-to-Cloud FaaS Platform",
-    booktitle = "Proc. 12th IEEE Internat. Conf. Cloud Engineering",
-    month = sep,
+    booktitle = "Proceedings of the 12th IEEE International Conference on Cloud Engineering",
+    pages = "66-71",
     year = 2024,
     publisher = "IEEE",
     address = "New York, NY, USA",
     series = "IC2E '24",
     location = "Paphos, Cyprus",
+    doi = "10.1109/IC2E61754.2024.00014"
 }
 ```
-
 For a full list of publications, please see [our website](https://www.tu.berlin/en/3s/research/publications).
 
 ## Remote server setup
