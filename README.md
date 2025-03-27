@@ -50,7 +50,7 @@ sudo tar -C /usr/local -xzf go1.20.6.linux-arm64.tar.gz
 rm go1.20.6.linux-arm64.tar.gz && cd .. && rmdir src/
 hx ~/.profile # on helix edior, alternatively vim or nano, etc.
 ```
-(optional) add these two below lines and save, then `source ~.profile` from terminal: 
+(optional) add these two below lines and save, then `source ~/.profile` from terminal: 
 ```
    PATH=$PATH:/usr/local/go/bin  
    GOPATH=$HOME/go
